@@ -1,79 +1,113 @@
-﻿"""Run a Sprint 2 integration check for the GitHub Archive ingestion pipeline."""
+﻿"""Run the TECHPULSE-AI V2 preprocessing and dataset fusion pipeline."""
 
 from __future__ import annotations
 
-import json
 import logging
-from typing import Any
+from pathlib import Path
 
-from app.collector.downloader import GitHubArchiveDownloader
-from app.collector.extractor import GitHubArchiveExtractor
-from app.collector.github_archive import (
-    GitHubArchiveCollectionError,
-    GitHubArchiveCollector,
-)
-from app.collector.parser import GitHubArchiveParser
-
-ARCHIVE_FILENAME = "2024-01-01-0.json.gz"
-MAX_EVENTS_TO_DISPLAY = 10
+from app.preprocessing.cve_preprocessor import CvePreprocessor
+from app.preprocessing.dataset_builder import DatasetBuilder
+from app.preprocessing.incident_preprocessor import IncidentPreprocessor
 
 LOGGER = logging.getLogger(__name__)
 
+PROJECT_ROOT = Path(__file__).resolve().parent
+CVE_2025_PATH = PROJECT_ROOT / "data" / "raw" / "cve" / "nvdcve-2.0-2025.json"
+CVE_2026_PATH = PROJECT_ROOT / "data" / "raw" / "cve" / "nvdcve-2.0-2026.json"
+INCIDENT_DATASET_1_PATH = (
+    PROJECT_ROOT / "data" / "raw" / "incidents" / "cybersecurity_dataset.csv"
+)
+INCIDENT_DATASET_2_PATH = (
+    PROJECT_ROOT
+    / "data"
+    / "raw"
+    / "incidents"
+    / "cybersecurity_synthesized_data.csv"
+)
+PROCESSED_DIRECTORY = PROJECT_ROOT / "data" / "processed"
+DATASET_OUTPUT_PATH = PROCESSED_DIRECTORY / "techpulse_dataset.parquet"
+REPORT_OUTPUT_PATH = PROCESSED_DIRECTORY / "preprocessing_report.json"
+
 
 def configure_logging() -> None:
-    """Configure application logging for the integration check."""
+    """Configure console logging for the preprocessing pipeline."""
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
     )
 
 
-def display_event(event_number: int, event: dict[str, Any]) -> None:
-    """Display one normalized event in a readable JSON format.
+def resolve_incident_dataset_2_path() -> Path:
+    """Resolve the configured synthesized dataset path with local compatibility.
 
-    Args:
-        event_number: Position of the event in the displayed result set.
-        event: Normalized event returned by the collector.
+    Returns:
+        The requested dataset path when it exists; otherwise, the existing local
+        filename used during early project setup.
     """
-    print(f"\n--- Normalized event {event_number} ---")
-    print(json.dumps(event, indent=2, ensure_ascii=False, default=str))
+    if INCIDENT_DATASET_2_PATH.is_file():
+        return INCIDENT_DATASET_2_PATH
+
+    legacy_path = (
+        PROJECT_ROOT
+        / "data"
+        / "raw"
+        / "incidents"
+        / "cybersecurity synthesized data (1).csv"
+    )
+    if legacy_path.is_file():
+        LOGGER.warning(
+            "Using legacy synthesized dataset filename %s; rename it to %s when possible.",
+            legacy_path.name,
+            INCIDENT_DATASET_2_PATH.name,
+        )
+        return legacy_path
+
+    return INCIDENT_DATASET_2_PATH
 
 
 def main() -> int:
-    """Run the GitHub Archive ingestion integration test.
+    """Build the unified TECHPULSE dataset and its preprocessing report.
 
     Returns:
-        Zero when the pipeline runs successfully, otherwise one.
+        Zero when all artifacts are generated successfully, otherwise one.
     """
     configure_logging()
-    LOGGER.info("Starting Sprint 2 ingestion integration test")
+    LOGGER.info("Starting TECHPULSE-AI V2 preprocessing pipeline")
 
-    downloader = GitHubArchiveDownloader()
-    parser = GitHubArchiveParser()
-    extractor = GitHubArchiveExtractor()
-    collector = GitHubArchiveCollector(
-        downloader=downloader,
-        parser=parser,
-        extractor=extractor,
-    )
+    cve_preprocessor = CvePreprocessor()
+    incident_preprocessor = IncidentPreprocessor()
+    dataset_builder = DatasetBuilder()
 
     try:
-        LOGGER.info("Collecting events from %s", ARCHIVE_FILENAME)
-        for event_number, event in enumerate(
-            collector.collect(ARCHIVE_FILENAME), start=1
-        ):
-            display_event(event_number, event)
-            if event_number >= MAX_EVENTS_TO_DISPLAY:
-                break
+        cve_2025 = cve_preprocessor.preprocess(CVE_2025_PATH)
+        cve_2026 = cve_preprocessor.preprocess(CVE_2026_PATH)
+        incident_dataset_1 = incident_preprocessor.load_dataset_1(
+            INCIDENT_DATASET_1_PATH
+        )
+        incident_dataset_2 = incident_preprocessor.load_dataset_2(
+            resolve_incident_dataset_2_path()
+        )
 
-        LOGGER.info("Sprint 2 ingestion integration test completed successfully")
+        unified_dataset = dataset_builder.build(
+            cve_2025=cve_2025,
+            cve_2026=cve_2026,
+            incident_dataset_1=incident_dataset_1,
+            incident_dataset_2=incident_dataset_2,
+        )
+        dataset_builder.save_dataset(unified_dataset, DATASET_OUTPUT_PATH)
+        report = dataset_builder.generate_report(unified_dataset, REPORT_OUTPUT_PATH)
+
+        LOGGER.info(
+            "Pipeline completed: %d records written to %s",
+            report["total_records"],
+            DATASET_OUTPUT_PATH,
+        )
         return 0
-
-    except GitHubArchiveCollectionError as error:
-        LOGGER.error("Integration test stopped because collection failed: %s", error)
+    except (FileNotFoundError, ValueError, OSError, ImportError) as error:
+        LOGGER.error("Preprocessing pipeline failed: %s", error)
         return 1
     except Exception:
-        LOGGER.exception("Integration test stopped because of an unexpected error")
+        LOGGER.exception("Preprocessing pipeline failed unexpectedly")
         return 1
 
 
