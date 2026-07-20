@@ -1,4 +1,4 @@
-﻿"""Predict cyber-threat severity with a fine-tuned DistilBERT model."""
+﻿"""Predict cyber-threat severity with a local or Hugging Face DistilBERT model."""
 
 from __future__ import annotations
 
@@ -17,34 +17,37 @@ class SeverityPredictor:
     """Load a saved severity classifier and predict from free text.
 
     Args:
-        model_source: Local directory or Hugging Face Hub model identifier.
+        model_reference: Local model directory or Hugging Face Hub repository ID.
         max_length: Maximum number of tokens accepted from an input description.
     """
 
     def __init__(
         self,
-        model_source: Path | str | None = None,
+        model_reference: Path | str | None = None,
         max_length: int = 256,
     ) -> None:
-        """Load the saved model on CPU only.
+        """Load the specified model on the best available local device.
 
-        Raises:
-            FileNotFoundError: If the configured model source does not exist locally.
+        A repository ID such as ``account/techpulse-distilbert-severity`` is
+        downloaded from Hugging Face Hub and cached by Transformers.
         """
-        self._device = torch.device("cpu")
+        configuration = ClassifierConfig()
+        use_default_local_model = (
+            model_reference is None and configuration.huggingface_model_id is None
+        )
+        resolved_reference = (
+            model_reference
+            or configuration.huggingface_model_id
+            or configuration.model_output_dir
+        )
+        self._validate_model_reference(resolved_reference, use_default_local_model)
+        self._model_reference = str(resolved_reference)
+
+        self._device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
         self._max_length = max_length
-        self._model_source = model_source or ClassifierConfig().model_output_dir
-        if isinstance(self._model_source, (Path, str)):
-            self._model_source = Path(self._model_source)
-
-        if isinstance(self._model_source, Path) and self._model_source.exists():
-            model_source = self._model_source
-        else:
-            model_source = str(self._model_source)
-
-        self._tokenizer = AutoTokenizer.from_pretrained(model_source)
+        self._tokenizer = AutoTokenizer.from_pretrained(self._model_reference)
         self._model = AutoModelForSequenceClassification.from_pretrained(
-            model_source
+            self._model_reference
         ).to(self._device)
         self._model.eval()
 
@@ -82,6 +85,21 @@ class SeverityPredictor:
             "confidence": round(float(probabilities[label_id].item()), 4),
         }
 
+    @staticmethod
+    def _validate_model_reference(
+        model_reference: Path | str,
+        require_local_directory: bool,
+    ) -> None:
+        """Validate local paths while allowing Hugging Face repository identifiers."""
+        path = Path(model_reference)
+        is_explicit_local_path = (
+            path.is_absolute()
+            or str(model_reference).startswith(".")
+            or require_local_directory
+        )
+        if is_explicit_local_path and not path.is_dir():
+            raise FileNotFoundError(f"Local model directory not found: {path}")
+
 
 def main() -> int:
     """Run one severity prediction from the command line."""
@@ -90,16 +108,13 @@ def main() -> int:
     )
     argument_parser.add_argument("text", help="Security description to classify")
     argument_parser.add_argument(
-        "--model-source",
-        default=ClassifierConfig().model_output_dir,
-        help=(
-            "Local model directory or Hugging Face Hub model identifier "
-            "for the trained classifier"
-        ),
+        "--model-reference",
+        default=None,
+        help="Local model directory or Hugging Face Hub repository ID",
     )
     arguments = argument_parser.parse_args()
 
-    result: dict[str, Any] = SeverityPredictor(arguments.model_source).predict(
+    result: dict[str, Any] = SeverityPredictor(arguments.model_reference).predict(
         arguments.text
     )
     print(json.dumps(result))
@@ -108,5 +123,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-
-
