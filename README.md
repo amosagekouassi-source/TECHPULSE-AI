@@ -1,114 +1,186 @@
 ﻿# TECHPULSE-AI
 
-TECHPULSE-AI is an AI-ready technology intelligence platform built from the
-[GitHub Archive](https://www.gharchive.org/) event stream. It provides a clean,
-modular ingestion foundation that downloads hourly archive files, streams their
-contents safely, and normalizes useful event data for future analytics and AI
-workflows.
+Assistant intelligent de cybersécurité pour les agences de voyage
 
-> **Current status:** Sprint 2 focuses exclusively on GitHub Archive ingestion.
+TECHPULSE-AI se concentre sur la cybersécurité des agences de voyage, des
+plateformes de billetterie et des systèmes de réservation. Le projet collecte
+et normalise des données de vulnérabilités et d’incidents pour proposer des
+alertes, des classements de risque et un assistant IA adapté aux besoins du
+secteur du voyage.
 
-## Features
+> **Current status:** Le projet a évolué vers un assistant de cybersécurité
+> pour les PME du voyage, avec un pipeline d’ingestion, un prétraitement de
+> données, une classification de sévérité et une intégration Hugging Face.
 
-- Downloads hourly GitHub Archive `.json.gz` files.
-- Creates the raw-data directory automatically when needed.
-- Streams compressed JSON line by line without loading an entire archive into
-  memory.
-- Skips malformed JSON records safely and logs diagnostics.
-- Extracts a consistent, AI-ready event schema.
-- Uses dependency injection to keep pipeline components testable and decoupled.
-- Includes unit tests for downloader, parser, extractor, and collector modules.
+## 1. Problématique
 
-## Architecture
+Les agences de voyage utilisent quotidiennement des systèmes de réservation,
+des plateformes de billetterie, des solutions de paiement en ligne et des
+outils de gestion des clients. Ces technologies sont exposées à des
+vulnérabilités de sécurité, des cyberattaques et des tentatives de fraude.
 
-The ingestion pipeline follows single-responsibility and dependency-inversion
-principles. Each component has one clear concern:
+La majorité des petites et moyennes agences ne disposent pas d’une équipe
+spécialisée en cybersécurité capable de surveiller en permanence les nouvelles
+menaces. Une faille non détectée ou une attaque réussie peut entraîner des
+pertes financières, une interruption de service et une atteinte à la réputation
+de l’entreprise.
 
-```text
-GitHubArchiveCollector
-        │
-        ├── GitHubArchiveDownloader  → downloads an hourly .json.gz archive
-        ├── GitHubArchiveParser      → yields parsed JSON events as a stream
-        └── GitHubArchiveExtractor   → normalizes useful event fields
-```
+## 2. Solution Proposée
 
-`GitHubArchiveCollector` orchestrates these components but does not duplicate
-their logic. The resulting normalized events can later feed preprocessing,
-embeddings, vector storage, analysis, and reporting modules.
+TECHPULSE-AI est un assistant intelligent de cybersécurité conçu spécialement
+pour les agences de voyage.
+
+La plateforme collecte et analyse automatiquement les informations de sécurité
+provenant de sources fiables afin d’identifier les menaces pouvant affecter les
+systèmes de réservation et de billetterie.
+
+Grâce à l’intelligence artificielle, elle fournit des alertes, des
+recommandations de correction et un assistant conversationnel permettant aux
+utilisateurs de comprendre rapidement les risques et les actions à entreprendre.
+
+## 3. Objectifs
+
+- Surveiller les vulnérabilités affectant les technologies utilisées dans le
+  secteur du voyage.
+- Fournir des alertes de sécurité pertinentes.
+- Aider les agences à mieux comprendre les risques auxquels elles sont exposées.
+- Générer des recommandations de correction adaptées.
+- Simplifier l’accès aux informations de cybersécurité grâce à l’intelligence
+  artificielle.
+
+## 4. Utilisateurs Cibles
+
+- Agences de voyage
+- Agences de billetterie
+- Responsables informatiques
+- Administrateurs systèmes
+- Responsables de la sécurité informatique
+- Gestionnaires de plateformes de réservation
+
+## 5. Fonctionnalités MVP
+
+- Surveillance des vulnérabilités de sécurité.
+- Classification automatique des risques.
+- Recherche intelligente dans les données de cybersécurité.
+- Assistant IA conversationnel.
+- Tableau de bord de suivi des menaces.
+- Recommandations de correction.
+
+## 6. Fonctionnalités Futures
+
+- Alertes de sécurité en temps réel.
+- Analyse des incidents récents du secteur du voyage.
+- Analyse des risques de fraude liés à la billetterie.
+- Historique des vulnérabilités surveillées.
+- Génération automatique de rapports de sécurité.
+- Recommandations de prévention contre la fraude.
+- Détection intelligente des comportements suspects.
+
+## 7. Architecture Technique
+
+1. Collecte des données via des API de cybersécurité et des flux publics.
+2. Nettoyage et prétraitement des données.
+3. Classification des vulnérabilités à l’aide de modèles NLP.
+4. Génération d’embeddings vectoriels.
+5. Stockage dans une base vectorielle FAISS.
+6. Recherche sémantique et système RAG.
+7. Génération de réponses via un assistant IA.
+8. Visualisation dans un tableau de bord interactif.
+
+## 8. Technologies Utilisées
+
+- Python
+- APIs
+- JSON
+- NLP (Traitement Automatique du Langage Naturel)
+- Vector Embeddings
+- FAISS
+- Retrieval-Augmented Generation (RAG)
+- Transformers
+- Machine Learning Supervisé
+- Feature Engineering
+
+## 9. Valeur Ajoutée
+
+TECHPULSE-AI permet aux agences de voyage d’accéder à une expertise
+cybersécurité sans disposer d’une équipe spécialisée. La solution centralise les
+informations critiques, simplifie l’analyse des menaces et aide les entreprises à
+prendre rapidement les bonnes décisions pour protéger leurs activités et leurs
+clients.
+
+## 10. Vision à Long Terme
+
+Faire de TECHPULSE-AI une plateforme de référence pour la cybersécurité des
+agences de voyage, capable de surveiller les menaces, anticiper les risques de
+fraude, assister les équipes métier et renforcer la sécurité des systèmes de
+réservation et de billetterie.
 
 ## Installation
 
-### Prerequisites
+### Prérequis
 
-- Python 3.12 or later
+- Python 3.12 ou plus récent
 - Git
 
-### Clone and prepare the project
+### Préparer le projet
 
 ```bash
 git clone https://github.com/amosagekouassi-source/TECHPULSE-AI.git
 cd TECHPULSE-AI
-```
-
-Create and activate a virtual environment:
-
-```bash
 python -m venv venv
 ```
 
-Windows PowerShell:
+Windows PowerShell :
 
 ```powershell
 .\venv\Scripts\Activate.ps1
 ```
 
-macOS/Linux:
+macOS/Linux :
 
 ```bash
 source venv/bin/activate
 ```
-
-Install the project dependencies:
 
 ```bash
 python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-For testing and code-quality tools, install the development dependencies:
+## Entraînement et déploiement sur Google Colab
 
-```bash
-python -m pip install pytest ruff black
+Ce projet supporte l’entraînement sur Colab et le déploiement sur Hugging Face
+Hub. Le script `app/classifier/train.py` accepte désormais les options
+`--push-to-hub` et `--hub-model-id`.
+
+### Exemple Colab
+
+```python
+!pip install -q -U pip
+!pip install -q -r requirements.txt
 ```
 
-## Usage
-
-Run the Sprint 2 integration check:
-
-```bash
-python main.py
+```python
+from huggingface_hub import login
+login(token="YOUR_HF_TOKEN")
 ```
 
-The command downloads the configured GitHub Archive hourly file into `data/raw/`,
-parses it, and displays the first ten normalized events.
-
-Run the unit tests:
-
 ```bash
-python -m pytest -q
+python app/classifier/train.py \
+  --dataset-path /path/to/techpulse_dataset.parquet \
+  --model-output-dir /content/models/distilbert_severity \
+  --model-name distilbert-base-uncased \
+  --epochs 3 \
+  --batch-size 16 \
+  --push-to-hub \
+  --hub-model-id YOUR_HF_USERNAME/techpulse-distilbert
 ```
 
-Check style and formatting:
+### Utilisation locale d’un modèle Hugging Face
 
 ```bash
-ruff check .
-black --check .
-```
-
-Apply Black formatting when necessary:
-
-```bash
-black .
+python app/classifier/predict.py "Texte de vulnérabilité" \
+  --model-source YOUR_HF_USERNAME/techpulse-distilbert
 ```
 
 ## Project Structure
@@ -116,55 +188,35 @@ black .
 ```text
 TECHPULSE-AI/
 ├── app/
-│   ├── collector/                  # GitHub Archive ingestion pipeline
-│   │   ├── downloader.py           # HTTP download of .json.gz archives
-│   │   ├── parser.py               # Streaming gzip/JSON reader
-│   │   ├── extractor.py            # Event-field normalization
-│   │   └── github_archive.py       # Pipeline orchestrator
-│   ├── preprocessing/              # Planned data-cleaning layer
-│   ├── embeddings/                 # Planned embedding generation
-│   ├── vector_store/               # Planned vector persistence
-│   ├── analysis/                   # Planned intelligence analysis
-│   ├── agent/                      # Planned AI agent layer
-│   ├── reports/                    # Planned reporting layer
-│   ├── dashboard/                  # Planned dashboard layer
-│   └── utils/                      # Shared utilities
+│   ├── classifier/                # Classification DistilBERT et prédiction
+│   ├── collector/                 # Pipeline d’ingestion GitHub Archive
+│   ├── preprocessing/             # Nettoyage et mappage des sources
+│   ├── embeddings/                # Génération d’embeddings
+│   ├── vector_store/              # Persistance vectorielle
+│   ├── analysis/                  # Analyse des menaces
+│   ├── agent/                     # Assistant IA conversationnel
+│   ├── reports/                   # Rapports de sécurité
+│   └── dashboard/                 # Visualisation des menaces
 ├── data/
-│   ├── raw/                        # Downloaded GitHub Archive files
-│   ├── processed/                  # Future processed datasets
-│   └── vectors/                    # Future vector data
-├── docs/                           # Project documentation
-├── notebook/                       # Exploratory notebooks
-├── tests/                          # Pytest unit tests
-├── .env.example                    # Environment-variable template
-├── main.py                         # Sprint 2 integration check
-├── requirements.txt                # Runtime dependencies
+│   ├── raw/
+│   ├── processed/
+│   └── vectors/
+├── docs/
+├── notebook/
+├── tests/
+├── main.py
+├── requirements.txt
 ├── README.md
 └── LICENSE
 ```
 
-## Tech Stack
+## Commandes utiles
 
-- **Language:** Python 3.12+
-- **HTTP client:** `requests`
-- **Filesystem paths:** `pathlib`
-- **Compressed data:** Python standard-library `gzip`
-- **JSON parsing:** Python standard-library `json`
-- **Testing:** `pytest`
-- **Linting:** `ruff`
-- **Formatting:** `black`
-- **Version control:** Git and GitHub
-- **Development environment:** VS Code
+- `python main.py` — exécute le pipeline de prétraitement.
+- `python app/classifier/train.py` — entraîne DistilBERT localement ou sur Colab.
+- `python app/classifier/predict.py` — prédit la sévérité d’une description.
+- `python -m pytest -q` — lance les tests.
 
-## Roadmap
+## Licence
 
-- [x] Sprint 2 — GitHub Archive download, parsing, extraction, orchestration,
-      and unit tests.
-- [ ] Sprint 3 — Data preprocessing and event-quality validation.
-- [ ] Sprint 4 — Embedding generation and vector-store integration.
-- [ ] Sprint 5 — Technology trend analysis and anomaly detection.
-- [ ] Sprint 6 — AI agent, reports, and interactive dashboard.
-
-## License
-
-This project is distributed under the [MIT License](LICENSE).
+Ce projet est distribué sous la licence MIT.

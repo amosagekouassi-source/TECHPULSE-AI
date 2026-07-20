@@ -16,14 +16,16 @@ ID_TO_LABEL: dict[int, str] = {label_id: label for label, label_id in LABEL_TO_I
 
 @dataclass(frozen=True, slots=True)
 class ClassifierConfig:
-    """Central configuration for CPU-only DistilBERT training.
+    """Central configuration for DistilBERT training and Hugging Face integration.
 
     Args:
         dataset_path: Unified TECHPULSE dataset used for training.
         model_output_dir: Directory in which the fine-tuned model is saved.
         model_name: Hugging Face base model identifier.
+        hub_model_id: Optional Hugging Face Hub repository identifier.
+        push_to_hub: Whether to push trained artifacts to the Hub after training.
         max_length: Maximum number of tokenizer tokens per description.
-        batch_size: Number of examples processed in each CPU batch.
+        batch_size: Number of examples processed in each batch.
         epochs: Number of complete training passes over the training split.
         learning_rate: AdamW optimizer learning rate.
         test_size: Fraction reserved for evaluation.
@@ -37,6 +39,8 @@ class ClassifierConfig:
         default_factory=lambda: Path("models/distilbert_severity")
     )
     model_name: str = "distilbert-base-uncased"
+    hub_model_id: str = ""
+    push_to_hub: bool = False
     max_length: int = 256
     batch_size: int = 16
     epochs: int = 3

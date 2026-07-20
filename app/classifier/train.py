@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import argparse
 import json
 import logging
 import random
@@ -38,7 +39,7 @@ def train(config: ClassifierConfig | None = None) -> dict[str, Any]:
     """
     training_config = config or ClassifierConfig()
     _set_seed(training_config.random_seed)
-    device = torch.device("cpu")
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     LOGGER.info("Using device: %s", device)
 
     split = load_and_split_dataset(
@@ -123,7 +124,7 @@ def _save_artifacts(
     duration_seconds: float,
     split: Any,
 ) -> None:
-    """Persist the trained model, tokenizer, and evaluation summary."""
+    """Persist the trained model, tokenizer, evaluation summary, and optionally push to Hugging Face Hub."""
     output_directory = Path(config.model_output_dir)
     output_directory.mkdir(parents=True, exist_ok=True)
     model.save_pretrained(output_directory)
@@ -139,6 +140,18 @@ def _save_artifacts(
     with metrics_path.open("w", encoding="utf-8") as metrics_file:
         json.dump(metrics, metrics_file, indent=2)
 
+    if config.push_to_hub:
+        if not config.hub_model_id:
+            raise ValueError(
+                "hub_model_id is required when push_to_hub is enabled"
+            )
+        LOGGER.info(
+            "Pushing model and tokenizer to Hugging Face Hub repository %s",
+            config.hub_model_id,
+        )
+        model.push_to_hub(config.hub_model_id, use_auth_token=True)
+        tokenizer.push_to_hub(config.hub_model_id, use_auth_token=True)
+
 
 def _set_seed(seed: int) -> None:
     """Set random seeds for repeatable CPU-only training."""
@@ -147,6 +160,101 @@ def _set_seed(seed: int) -> None:
     torch.manual_seed(seed)
 
 
+def main() -> int:
+    """Train the classifier from the command line and optionally push artifacts to Hugging Face Hub."""
+    argument_parser = argparse.ArgumentParser(
+        description=(
+            "Train DistilBERT for TECHPULSE-AI and optionally push the trained model to Hugging Face Hub."
+        )
+    )
+    argument_parser.add_argument(
+        "--dataset-path",
+        type=Path,
+        default=ClassifierConfig().dataset_path,
+        help="Path to the prepared Parquet dataset.",
+    )
+    argument_parser.add_argument(
+        "--model-output-dir",
+        type=Path,
+        default=ClassifierConfig().model_output_dir,
+        help="Directory where the trained model artifacts will be saved.",
+    )
+    argument_parser.add_argument(
+        "--model-name",
+        default=ClassifierConfig().model_name,
+        help="Hugging Face base model identifier to fine-tune.",
+    )
+    argument_parser.add_argument(
+        "--hub-model-id",
+        default=ClassifierConfig().hub_model_id,
+        help="Hugging Face Hub repository identifier for pushing the model.",
+    )
+    argument_parser.add_argument(
+        "--push-to-hub",
+        action="store_true",
+        help="Push the trained model and tokenizer to Hugging Face Hub.",
+    )
+    argument_parser.add_argument(
+        "--epochs",
+        type=int,
+        default=ClassifierConfig().epochs,
+        help="Number of training epochs.",
+    )
+    argument_parser.add_argument(
+        "--batch-size",
+        type=int,
+        default=ClassifierConfig().batch_size,
+        help="Batch size used during training.",
+    )
+    argument_parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=ClassifierConfig().learning_rate,
+        help="Learning rate for the optimizer.",
+    )
+    argument_parser.add_argument(
+        "--max-length",
+        type=int,
+        default=ClassifierConfig().max_length,
+        help="Maximum tokenizer sequence length.",
+    )
+    argument_parser.add_argument(
+        "--test-size",
+        type=float,
+        default=ClassifierConfig().test_size,
+        help="Fraction of the dataset reserved for testing.",
+    )
+    argument_parser.add_argument(
+        "--random-seed",
+        type=int,
+        default=ClassifierConfig().random_seed,
+        help="Random seed for repeatability.",
+    )
+
+    arguments = argument_parser.parse_args()
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(name)s | %(message)s")
+
+    config = ClassifierConfig(
+        dataset_path=arguments.dataset_path,
+        model_output_dir=arguments.model_output_dir,
+        model_name=arguments.model_name,
+        hub_model_id=arguments.hub_model_id,
+        push_to_hub=arguments.push_to_hub,
+        epochs=arguments.epochs,
+        batch_size=arguments.batch_size,
+        learning_rate=arguments.learning_rate,
+        max_length=arguments.max_length,
+        test_size=arguments.test_size,
+        random_seed=arguments.random_seed,
+    )
+
+    try:
+        train(config)
+        return 0
+    except Exception as error:
+        LOGGER.exception("Training failed: %s", error)
+        return 1
+
+
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s | %(levelname)s | %(message)s")
-    train()
+    raise SystemExit(main())
