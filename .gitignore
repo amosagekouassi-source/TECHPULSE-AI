@@ -216,3 +216,8 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Local datasets and trained model artifacts
+data/raw/
+data/processed/
+models/
