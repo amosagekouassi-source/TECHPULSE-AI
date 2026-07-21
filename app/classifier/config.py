@@ -1,4 +1,4 @@
-﻿"""Configuration for DistilBERT severity classification."""
+"""Configuration for DistilBERT severity classification."""
 
 from __future__ import annotations
 
@@ -17,33 +17,20 @@ ID_TO_LABEL: dict[int, str] = {label_id: label for label, label_id in LABEL_TO_I
 
 @dataclass(frozen=True, slots=True)
 class ClassifierConfig:
-    """Central configuration for local or Google Colab DistilBERT training.
-
-    Args:
-        dataset_path: Unified TECHPULSE dataset used for training.
-        model_output_dir: Local directory in which the fine-tuned model is saved.
-        model_name: Hugging Face base model identifier.
-        max_length: Maximum number of tokenizer tokens per description.
-        batch_size: Number of examples processed in each batch.
-        epochs: Number of complete training passes over the training split.
-        learning_rate: AdamW optimizer learning rate.
-        test_size: Fraction reserved for evaluation.
-        random_seed: Seed used for reproducible splitting and training.
-        device: ``auto`` selects CUDA when available, otherwise CPU.
-        huggingface_model_id: Optional Hugging Face Hub repository identifier.
-        huggingface_private: Whether a newly created Hub repository is private.
-    """
+    """Central configuration for local or Google Colab DistilBERT training."""
 
     dataset_path: Path = field(
         default_factory=lambda: Path("data/processed/techpulse_dataset.parquet")
     )
     model_output_dir: Path = field(
-        default_factory=lambda: Path("models/distilbert_severity")
+        default_factory=lambda: Path("models/distilbert-severity")
     )
     model_name: str = "distilbert-base-uncased"
-    max_length: int = 256
-    batch_size: int = 16
-    epochs: int = 3
+    max_length: int = 128
+    batch_size: int = 8
+    gradient_accumulation_steps: int = 4
+    epochs: int = 1
+    sample_size: int = 10000
     learning_rate: float = 2e-5
     test_size: float = 0.2
     random_seed: int = 42

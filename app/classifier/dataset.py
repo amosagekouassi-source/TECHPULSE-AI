@@ -1,4 +1,4 @@
-﻿"""Dataset loading and tokenization for severity classification."""
+"""Dataset loading and tokenization for severity classification."""
 
 from __future__ import annotations
 
@@ -68,13 +68,15 @@ def load_and_split_dataset(
     dataset_path: Path | str,
     test_size: float = 0.2,
     random_seed: int = 42,
+    sample_size: int | None = 10000,
 ) -> DatasetSplit:
-    """Load, clean, label-encode, and split the TECHPULSE training dataset.
+    """Load, clean, label-encode, sample, and split the TECHPULSE training dataset.
 
     Args:
         dataset_path: Path to ``techpulse_dataset.parquet``.
         test_size: Fraction of examples reserved for testing.
         random_seed: Seed used by the stratified split.
+        sample_size: Optional maximum number of examples for fast stratified sampling.
 
     Returns:
         Stratified train and test dataframes with ``description`` and ``label``.
@@ -105,6 +107,16 @@ def load_and_split_dataset(
 
     if prepared.empty:
         raise ValueError("No valid labeled examples remain after dataset preparation")
+
+    if sample_size is not None and len(prepared) > sample_size:
+        LOGGER.info("Subsampling dataset to %d examples with stratified sampling", sample_size)
+        prepared, _ = train_test_split(
+            prepared,
+            train_size=sample_size,
+            random_state=random_seed,
+            stratify=prepared["label"],
+        )
+        prepared = prepared.reset_index(drop=True)
 
     label_counts = prepared["label"].value_counts()
     if (label_counts < 2).any():

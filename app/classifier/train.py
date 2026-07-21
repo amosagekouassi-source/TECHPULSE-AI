@@ -1,4 +1,4 @@
-﻿"""Train a DistilBERT classifier for cyber-threat severity."""
+"""Train a DistilBERT classifier for cyber-threat severity."""
 
 from __future__ import annotations
 
@@ -48,6 +48,7 @@ def train(config: ClassifierConfig | None = None) -> dict[str, Any]:
         training_config.dataset_path,
         test_size=training_config.test_size,
         random_seed=training_config.random_seed,
+        sample_size=training_config.sample_size,
     )
     tokenizer = AutoTokenizer.from_pretrained(training_config.model_name)
     model = AutoModelForSequenceClassification.from_pretrained(
@@ -75,14 +76,21 @@ def train(config: ClassifierConfig | None = None) -> dict[str, Any]:
     optimizer = AdamW(model.parameters(), lr=training_config.learning_rate)
 
     LOGGER.info(
-        "Starting training: %d examples, %d epochs, batch size %d",
+        "Starting training: %d examples, %d epochs, batch size %d, grad accum %d",
         len(train_dataset),
         training_config.epochs,
         training_config.batch_size,
+        training_config.gradient_accumulation_steps,
     )
     start_time = time.perf_counter()
     for epoch in range(training_config.epochs):
-        average_loss = _train_epoch(model, train_loader, optimizer, device)
+        average_loss = _train_epoch(
+            model,
+            train_loader,
+            optimizer,
+            device,
+            gradient_accumulation_steps=training_config.gradient_accumulation_steps,
+        )
         LOGGER.info(
             "Epoch %d/%d completed with average loss %.4f",
             epoch + 1,
