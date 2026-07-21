@@ -123,7 +123,9 @@ st.markdown(
 
 def get_rag_pipeline() -> RAGPipeline:
     """Initialize and retrieve RAGPipeline instance stored in session_state."""
-    if "rag_pipeline" not in st.session_state or not hasattr(st.session_state.rag_pipeline, "process_chat_message"):
+    if "rag_pipeline" in st.session_state and not hasattr(st.session_state.rag_pipeline, "process_chat_message"):
+        del st.session_state["rag_pipeline"]
+    if "rag_pipeline" not in st.session_state:
         st.session_state.rag_pipeline = RAGPipeline()
     return st.session_state.rag_pipeline
 
@@ -225,6 +227,8 @@ def main() -> None:
 
     st.sidebar.markdown("---")
     if st.sidebar.button("🔄 Réinitialiser la conversation"):
+        if "rag_pipeline" in st.session_state:
+            del st.session_state["rag_pipeline"]
         st.session_state.messages = [
             {
                 "role": "assistant",
