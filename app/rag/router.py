@@ -22,12 +22,19 @@ class IntentRouter:
     def __init__(self) -> None:
         """Initialize pattern matchers for deterministic intent classification."""
         self.greetings_patterns = [
-            r"^\s*bonjour\b", r"^\s*salut\b", r"^\s*hello\b", r"^\s*coucou\b", r"^\s*hi\b"
+            r"^\s*bonjour\b", r"^\s*salut\b", r"^\s*hello\b", r"^\s*coucou\b", r"^\s*hi\b", r"^\s*bonsoir\b", r"^\s*hey\b"
+        ]
+
+        self.system_status_patterns = [
+            r"\bbilan sur l['’]état\b", r"\bétat actuel du système\b", r"\betat actuel du systeme\b",
+            r"\bétat du système\b", r"\betat du systeme\b", r"\bstatut du système\b", r"\bbilan global\b",
+            r"\bbilan système\b", r"\bfonctionnement de l['’]application\b", r"\bcomment vas-tu\b",
+            r"\bqui es-tu\b", r"\bprésente-toi\b", r"\bpresente-toi\b", r"\bque fais-tu\b", r"\bcomment ça va\b"
         ]
 
         self.report_patterns = [
-            r"\brapport\b", r"\bdernière[s]? 24h\b", r"\b24h\b", r"\bce mois-ci\b",
-            r"\bmenaces récente[s]?\b", r"\bbilan\b", r"\bsynthèse des menaces\b"
+            r"\brapport 24h\b", r"\bdernière[s]? 24h\b", r"\bgénérer un rapport\b",
+            r"\brapport de sécurité\b", r"\bsynthèse des menaces 24h\b", r"\brapport mensuel\b"
         ]
 
         self.cve_patterns = [
@@ -66,8 +73,9 @@ class IntentRouter:
         """
         text = query.lower().strip()
 
-        # 1. Check for greetings or simple general questions
+        # 1. Check for greetings, system status, or general questions
         is_greeting = any(re.search(pat, text) for pat in self.greetings_patterns)
+        is_system_status = any(re.search(pat, text) for pat in self.system_status_patterns)
         is_report = any(re.search(pat, text) for pat in self.report_patterns)
         is_cve = any(re.search(pat, text) for pat in self.cve_patterns)
         is_threat = any(re.search(pat, text) for pat in self.threat_patterns)
@@ -75,40 +83,50 @@ class IntentRouter:
         is_general_def = any(re.search(pat, text) for pat in self.general_def_patterns)
 
         # Contextual check: if follow-up refers to earlier system/API topic
-        if not (is_threat or is_cve or is_report) and history:
+        if not (is_threat or is_cve or is_report or is_greeting or is_system_status) and history:
             user_past = " ".join([m.get("content", "").lower() for m in history if m.get("role") == "user"])
             if any(term in user_past for term in ["api", "réservation", "billetterie", "cve", "attaque"]):
                 is_cyber = True
 
         # Classify intent & set pipeline execution flags
-        if is_report:
+        if is_greeting or is_system_status:
+            # Intention A: General conversation / System status / Greeting -> No FAISS search
+            intent = INTENT_GENERAL_QUESTION
+            use_distilbert = False
+            use_faiss = False
+            use_reports = False
+        elif is_report:
+            # Report generation intent
             intent = INTENT_REPORT_REQUEST
             use_distilbert = False
             use_faiss = True
             use_reports = True
         elif is_cve:
+            # Intention B: CVE analysis -> Full RAG
             intent = INTENT_CVE_ANALYSIS
             use_distilbert = True
             use_faiss = True
             use_reports = False
         elif is_threat:
+            # Intention B: Threat analysis -> Full RAG
             intent = INTENT_THREAT_ANALYSIS
             use_distilbert = True
             use_faiss = True
             use_reports = False
         elif is_cyber:
+            # Intention B: Cyber business query -> RAG
             intent = INTENT_CYBER_QUESTION
             use_distilbert = False
             use_faiss = True
             use_reports = False
-        elif is_greeting or (is_general_def and not (is_threat or is_cve)):
+        elif is_general_def:
             intent = INTENT_GENERAL_QUESTION
             use_distilbert = False
             use_faiss = False
             use_reports = False
         else:
             # Fallback for general questions vs business questions
-            intent = INTENT_CYBER_QUESTION if len(text) > 25 else INTENT_GENERAL_QUESTION
+            intent = INTENT_CYBER_QUESTION if len(text) > 30 else INTENT_GENERAL_QUESTION
             use_distilbert = False
             use_faiss = (intent == INTENT_CYBER_QUESTION)
             use_reports = False

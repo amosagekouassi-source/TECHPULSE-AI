@@ -1,0 +1,567 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>TECHPULSE-AI | Cyber Intelligence & Travel Security Suite</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- Tailwind CSS CDN -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = {
+        darkMode: 'class',
+        theme: {
+          extend: {
+            colors: {
+              brand: {
+                dark: "#0B0F17",
+                card: "#151C2C",
+                border: "#1E293B",
+                cyan: "#06B6D4",
+                emerald: "#10B981",
+                amber: "#F59E0B",
+                rose: "#F43F5E",
+              }
+            },
+            fontFamily: {
+              sans: ['Inter', 'system-ui', 'sans-serif'],
+            }
+          }
+        }
+      }
+    </script>
+    <!-- React & Babel CDNs -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <!-- Lucide Icons CDN -->
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <style>
+      body {
+        background-color: #0B0F17;
+        color: #F8FAFC;
+        font-family: 'Inter', sans-serif;
+      }
+      .glass-panel {
+        background: rgba(21, 28, 44, 0.75);
+        backdrop-filter: blur(14px);
+        -webkit-backdrop-filter: blur(14px);
+        border: 1px solid rgba(255, 255, 255, 0.08);
+      }
+      .glow-cyan {
+        box-shadow: 0 0 25px -5px rgba(6, 182, 212, 0.3);
+      }
+      ::-webkit-scrollbar {
+        width: 6px;
+        height: 6px;
+      }
+      ::-webkit-scrollbar-track {
+        background: #0B0F17;
+      }
+      ::-webkit-scrollbar-thumb {
+        background: #1E293B;
+        border-radius: 9999px;
+      }
+    </style>
+  </head>
+  <body class="bg-[#0B0F17] text-slate-100 min-h-screen">
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useRef } = React;
+
+      // Translations Dictionary
+      const translations = {
+        fr: {
+          brandTitle: "TECHPULSE-AI",
+          brandSubtitle: "Intelligence Cyber & Sécurité du Voyage",
+          agencyLabel: "Agence",
+          agencies: {
+            abidjan: "Abidjan Tourisme Suite",
+            paris: "Paris Travel & Booking Hub",
+            global: "Global Amadeus Agency Network",
+          },
+          statusProtected: "🟢 Systèmes Protégés",
+          languageBtn: "FR 🇫🇷",
+          switchLanguage: "Passer en Anglais",
+          nav: {
+            dashboard: "Tableau de Bord",
+            assistant: "Assistant Cyber",
+            gdsSecurity: "Sécurité API & GDS",
+            settings: "Paramètres",
+          },
+          systemStatusTitle: "Moteur IA Ops",
+          systemStatusOnline: "Tous les services opérationnels",
+          dashboard: {
+            title: "Tableau de Bord de Cybersécurité Exécutif",
+            subtitle: "Vue unifiée des vulnérabilités, API de réservation GDS et menaces cyber du secteur voyage.",
+            kpis: {
+              monitoredApis: "API Surveillées",
+              monitoredApisSub: "Amadeus, Sabre, Billetterie, Paiement",
+              riskScore: "Score de Risque Global",
+              riskScoreSub: "+3 pts ce mois-ci",
+              activeAlerts: "Alertes Actives",
+              activeAlertsSub: "0 Critique, 2 Élevées",
+              protectedBookings: "Réservations Protégées",
+              protectedBookingsSub: "24h glissantes",
+            },
+            quickActions: {
+              title: "Actions Rapides & Recommandations Prioritaires",
+              auditPayment: "Auditer la passerelle de paiement",
+              auditPaymentDesc: "Lancer un scan automatisé des jetons PCI-DSS sur Stripe et Worldpay.",
+              verifyAmadeus: "Vérifier API GDS Amadeus",
+              verifyAmadeusDesc: "Vérifier la validité des certs TLS 1.3 et le rate-limiting des flux billetterie.",
+              scanEndpoints: "Scanner endpoints de réservation",
+              scanEndpointsDesc: "Inspecter les vulnérabilités de type injection & RCE sur les webhooks.",
+              generateReport: "Générer Rapport PDF 24h",
+              generateReportDesc: "Exporter une synthèse exécutive prête pour le comité de direction.",
+              actionSuccess: "Action lancée avec succès !",
+            }
+          },
+          assistant: {
+            title: "Assistant IA Cyber TECHPULSE (RAG & Advisory)",
+            subtitle: "Posez vos questions ou décrivez un incident pour obtenir des recommandations spécialisées Tourisme & GDS.",
+            initialGreeting: "Bonjour ! Je suis TECHPULSE-AI, votre assistant virtuel en cybersécurité dédié au secteur du voyage. Comment puis-je vous aider aujourd'hui ?",
+            promptChipsTitle: "💡 Exemples de requêtes rapides (cliquez pour tester) :",
+            promptChips: [
+              "Qu'est-ce qu'une CVE ?",
+              "Comment sécuriser nos API GDS Amadeus ?",
+              "Nous avons détecté une vulnérabilité critique RCE sur notre serveur de réservation.",
+              "Quels sont les risques de fraude sur les paiements par carte en agence ?",
+            ],
+            inputPlaceholder: "Posez votre question cybersécurité (ex: failles API, ransomware, conformité PCI-DSS)...",
+            sendBtn: "Envoyer",
+            processing: "TECHPULSE-AI analyse la demande via FAISS & DistilBERT...",
+            cveSourcesLabel: "Sources RAG & CVE Consultées :",
+            intentLabel: "Intention Détectée :",
+            severityLabel: "Sévérité DistilBERT :",
+          },
+          gdsSecurity: {
+            title: "Moniteur de Sécurité API & Connecteurs GDS",
+            subtitle: "Surveillance en temps réel des API de réservation, GDS (Amadeus, Sabre, Galileo) et passerelles de paiement.",
+            systems: [
+              { name: "Amadeus Flight GDS API", type: "GDS Billetterie Aérienne", status: "Protégé", latency: "42 ms", tls: "TLS 1.3 (Valide)", anomaly: "Aucune" },
+              { name: "Sabre Hotel Booking Webhook", type: "Moteur Hôtellerie", status: "Vigilance", latency: "115 ms", tls: "TLS 1.2 (Renouvellement requis)", anomaly: "Tentatives de force brute bloquées (23 req/s)" },
+              { name: "Stripe Payment Gateway", type: "Passerelle Carte Bancaire", status: "Protégé", latency: "28 ms", tls: "PCI-DSS v4.0", anomaly: "Aucune" },
+              { name: "Galileo Rail & Bus Connector", type: "Transport Terrestre", status: "Protégé", latency: "64 ms", tls: "TLS 1.3 (Valide)", anomaly: "Aucune" },
+            ]
+          },
+          settings: {
+            title: "Paramètres & Configuration de la Plateforme",
+            subtitle: "Gérez les fournisseurs LLM, les seuils d'alertes et la configuration système.",
+            llmProviderTitle: "Fournisseur LLM Actif",
+            llmProviders: {
+              gemini: "Google Gemini 2.5 Flash (Recommandé - Mode Cloud)",
+              openai: "OpenAI GPT-4o Mini",
+              offline: "Moteur Hors Ligne TECHPULSE (Template local)",
+            },
+            saveBtn: "Enregistrer la Configuration",
+            saveSuccess: "Configuration mise à jour avec succès !",
+          }
+        },
+        en: {
+          brandTitle: "TECHPULSE-AI",
+          brandSubtitle: "Cyber Intelligence & Travel Security Suite",
+          agencyLabel: "Agency",
+          agencies: {
+            abidjan: "Abidjan Tourism Suite",
+            paris: "Paris Travel & Booking Hub",
+            global: "Global Amadeus Agency Network",
+          },
+          statusProtected: "🟢 Systems Protected",
+          languageBtn: "EN 🇬🇧",
+          switchLanguage: "Switch to French",
+          nav: {
+            dashboard: "Dashboard",
+            assistant: "Cyber Assistant",
+            gdsSecurity: "API & GDS Security",
+            settings: "Settings",
+          },
+          systemStatusTitle: "AI Engine Ops",
+          systemStatusOnline: "All services operational",
+          dashboard: {
+            title: "Executive Cybersecurity Dashboard",
+            subtitle: "Unified view of vulnerabilities, GDS booking APIs, and cyber threats in the travel industry.",
+            kpis: {
+              monitoredApis: "Monitored APIs",
+              monitoredApisSub: "Amadeus, Sabre, Ticketing, Payments",
+              riskScore: "Global Risk Score",
+              riskScoreSub: "+3 pts this month",
+              activeAlerts: "Active Alerts",
+              activeAlertsSub: "0 Critical, 2 High",
+              protectedBookings: "Protected Bookings",
+              protectedBookingsSub: "Rolling 24 hours",
+            },
+            quickActions: {
+              title: "Quick Actions & Priority Recommendations",
+              auditPayment: "Audit Payment Gateway",
+              auditPaymentDesc: "Run an automated scan of PCI-DSS tokens on Stripe and Worldpay.",
+              verifyAmadeus: "Verify Amadeus GDS API",
+              verifyAmadeusDesc: "Verify TLS 1.3 certificates and rate-limiting on ticketing flows.",
+              scanEndpoints: "Scan Booking Endpoints",
+              scanEndpointsDesc: "Inspect webhook vulnerabilities for injection & RCE flaws.",
+              generateReport: "Generate 24h PDF Report",
+              generateReportDesc: "Export an executive summary ready for the board of directors.",
+              actionSuccess: "Action initiated successfully!",
+            }
+          },
+          assistant: {
+            title: "TECHPULSE AI Cyber Assistant (RAG & Advisory)",
+            subtitle: "Ask questions or describe an incident for specialized Travel & GDS security advisories.",
+            initialGreeting: "Hello! I am TECHPULSE-AI, your virtual cybersecurity assistant dedicated to the travel industry. How can I assist you today?",
+            promptChipsTitle: "💡 Quick prompt examples (click to try):",
+            promptChips: [
+              "What is a CVE?",
+              "How to secure our Amadeus GDS APIs?",
+              "We detected a critical RCE vulnerability on our booking server.",
+              "What are the risks of credit card payment fraud in travel agencies?",
+            ],
+            inputPlaceholder: "Ask a cybersecurity question (e.g., API vulnerabilities, ransomware, PCI-DSS compliance)...",
+            sendBtn: "Send",
+            processing: "TECHPULSE-AI is analyzing your request via FAISS & DistilBERT...",
+            cveSourcesLabel: "RAG & CVE Sources Consulted:",
+            intentLabel: "Detected Intent:",
+            severityLabel: "DistilBERT Severity:",
+          },
+          gdsSecurity: {
+            title: "API Security & GDS Connectors Monitor",
+            subtitle: "Real-time surveillance of reservation APIs, GDS systems (Amadeus, Sabre, Galileo) and payment gateways.",
+            systems: [
+              { name: "Amadeus Flight GDS API", type: "Airline Ticketing GDS", status: "Protected", latency: "42 ms", tls: "TLS 1.3 (Valid)", anomaly: "None" },
+              { name: "Sabre Hotel Booking Webhook", type: "Hospitality Engine", status: "Vigilance", latency: "115 ms", tls: "TLS 1.2 (Renewal required)", anomaly: "Blocked brute force attempts (23 req/s)" },
+              { name: "Stripe Payment Gateway", type: "Credit Card Gateway", status: "Protected", latency: "28 ms", tls: "PCI-DSS v4.0", anomaly: "None" },
+              { name: "Galileo Rail & Bus Connector", type: "Ground Transport", status: "Protected", latency: "64 ms", tls: "TLS 1.3 (Valid)", anomaly: "None" },
+            ]
+          },
+          settings: {
+            title: "Platform Settings & Configuration",
+            subtitle: "Manage LLM providers, notification thresholds, and system preferences.",
+            llmProviderTitle: "Active LLM Provider",
+            llmProviders: {
+              gemini: "Google Gemini 2.5 Flash (Recommended - Cloud Mode)",
+              openai: "OpenAI GPT-4o Mini",
+              offline: "TECHPULSE Offline Engine (Local Template)",
+            },
+            saveBtn: "Save Configuration",
+            saveSuccess: "Configuration updated successfully!",
+          }
+        }
+      };
+
+      function Header({ lang, setLang, agency, setAgency, t }) {
+        return (
+          <header className="sticky top-0 z-40 w-full glass-panel border-b border-slate-800/80 px-6 py-4 flex items-center justify-between gap-4">
+            <div className="flex items-center space-x-3">
+              <div className="flex items-center justify-center w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-emerald-500 text-white font-black text-xl shadow-lg glow-cyan">
+                🛡️
+              </div>
+              <div>
+                <div className="flex items-center space-x-2">
+                  <h1 className="text-xl font-bold tracking-tight text-white">{t.brandTitle}</h1>
+                  <span className="px-2 py-0.5 text-[10px] font-extrabold uppercase tracking-wider rounded-md bg-cyan-500/10 text-cyan-400 border border-cyan-500/30">
+                    V2.4 React SaaS
+                  </span>
+                </div>
+                <p className="text-xs text-slate-400 font-medium">{t.brandSubtitle}</p>
+              </div>
+            </div>
+
+            <div className="flex items-center space-x-3">
+              <div className="px-3 py-1.5 rounded-lg bg-slate-800/80 border border-slate-700/80 text-xs text-slate-300">
+                <span className="font-medium mr-1">{t.agencyLabel}:</span>
+                <select
+                  value={agency}
+                  onChange={(e) => setAgency(e.target.value)}
+                  className="bg-transparent text-slate-200 font-semibold focus:outline-none cursor-pointer"
+                >
+                  <option value="abidjan" className="bg-slate-900">{t.agencies.abidjan}</option>
+                  <option value="paris" className="bg-slate-900">{t.agencies.paris}</option>
+                  <option value="global" className="bg-slate-900">{t.agencies.global}</option>
+                </select>
+              </div>
+
+              <div className="px-3 py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 text-xs font-semibold">
+                {t.statusProtected}
+              </div>
+
+              <button
+                onClick={() => setLang(lang === 'fr' ? 'en' : 'fr')}
+                className="px-3.5 py-1.5 rounded-lg bg-gradient-to-r from-cyan-600 to-cyan-700 hover:from-cyan-500 hover:to-cyan-600 text-white text-xs font-bold shadow-md transition transform active:scale-95"
+              >
+                🌐 {t.languageBtn}
+              </button>
+            </div>
+          </header>
+        );
+      }
+
+      function Sidebar({ activeTab, setActiveTab, t }) {
+        const navItems = [
+          { id: 'dashboard', label: t.nav.dashboard, icon: '📊' },
+          { id: 'assistant', label: t.nav.assistant, icon: '💬' },
+          { id: 'gdsSecurity', label: t.nav.gdsSecurity, icon: '🌐' },
+          { id: 'settings', label: t.nav.settings, icon: '⚙️' },
+        ];
+
+        return (
+          <aside className="w-64 glass-panel border-r border-slate-800/80 p-4 flex flex-col justify-between shrink-0 min-h-[calc(100vh-80px)]">
+            <div className="space-y-6">
+              <p className="px-3 text-[11px] font-bold uppercase tracking-wider text-slate-400">Navigation Suite</p>
+              <nav className="space-y-1.5">
+                {navItems.map((item) => (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`w-full flex items-center space-x-3 px-3.5 py-2.5 rounded-xl font-semibold text-sm transition ${
+                      activeTab === item.id
+                        ? 'bg-gradient-to-r from-cyan-500/20 to-emerald-500/10 text-cyan-400 border border-cyan-500/30 shadow-lg'
+                        : 'text-slate-400 hover:text-slate-200 hover:bg-slate-800/50'
+                    }`}
+                  >
+                    <span>{item.icon}</span>
+                    <span>{item.label}</span>
+                  </button>
+                ))}
+              </nav>
+            </div>
+
+            <div className="p-3 rounded-xl bg-slate-900/90 border border-slate-800 space-y-2">
+              <div className="text-xs font-semibold text-slate-300 flex items-center space-x-2">
+                <span>💻</span>
+                <span>{t.systemStatusTitle}</span>
+              </div>
+              <div className="text-[11px] text-emerald-400 font-medium flex items-center space-x-1.5">
+                <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+                <span>{t.systemStatusOnline}</span>
+              </div>
+            </div>
+          </aside>
+        );
+      }
+
+      function DashboardTab({ t, notify }) {
+        return (
+          <div className="space-y-6">
+            <div className="glass-panel p-6 rounded-2xl border border-slate-800 bg-gradient-to-r from-slate-900/90 via-slate-900/60 to-cyan-950/30">
+              <h2 className="text-2xl font-bold text-white tracking-tight">{t.dashboard.title}</h2>
+              <p className="text-sm text-slate-400 mt-1">{t.dashboard.subtitle}</p>
+            </div>
+
+            <div className="grid grid-cols-4 gap-4">
+              <div className="glass-panel p-5 rounded-2xl border border-slate-800">
+                <span className="text-xs font-semibold text-slate-400 uppercase">{t.dashboard.kpis.monitoredApis}</span>
+                <div className="mt-3 text-3xl font-extrabold text-white">14</div>
+                <p className="text-xs text-slate-400 mt-1">{t.dashboard.kpis.monitoredApisSub}</p>
+              </div>
+
+              <div className="glass-panel p-5 rounded-2xl border border-slate-800">
+                <span className="text-xs font-semibold text-slate-400 uppercase">{t.dashboard.kpis.riskScore}</span>
+                <div className="mt-3 text-3xl font-extrabold text-emerald-400">28<span className="text-sm text-slate-400">/100</span></div>
+                <p className="text-xs text-emerald-400 font-semibold mt-1">{t.dashboard.kpis.riskScoreSub}</p>
+              </div>
+
+              <div className="glass-panel p-5 rounded-2xl border border-slate-800">
+                <span className="text-xs font-semibold text-slate-400 uppercase">{t.dashboard.kpis.activeAlerts}</span>
+                <div className="mt-3 text-3xl font-extrabold text-amber-400">2</div>
+                <p className="text-xs text-slate-400 mt-1">{t.dashboard.kpis.activeAlertsSub}</p>
+              </div>
+
+              <div className="glass-panel p-5 rounded-2xl border border-slate-800">
+                <span className="text-xs font-semibold text-slate-400 uppercase">{t.dashboard.kpis.protectedBookings}</span>
+                <div className="mt-3 text-3xl font-extrabold text-white">18,420</div>
+                <p className="text-xs text-slate-400 mt-1">{t.dashboard.kpis.protectedBookingsSub}</p>
+              </div>
+            </div>
+
+            <div className="glass-panel p-6 rounded-2xl border border-slate-800">
+              <h3 className="text-base font-bold text-white mb-4">⚡ {t.dashboard.quickActions.title}</h3>
+              <div className="grid grid-cols-4 gap-4">
+                <div onClick={() => notify(t.dashboard.quickActions.actionSuccess)} className="p-4 rounded-xl bg-slate-900 border border-slate-800 hover:border-cyan-500/40 cursor-pointer transition">
+                  <h4 className="font-bold text-sm text-white">{t.dashboard.quickActions.auditPayment}</h4>
+                  <p className="text-xs text-slate-400 mt-1">{t.dashboard.quickActions.auditPaymentDesc}</p>
+                </div>
+                <div onClick={() => notify(t.dashboard.quickActions.actionSuccess)} className="p-4 rounded-xl bg-slate-900 border border-slate-800 hover:border-emerald-500/40 cursor-pointer transition">
+                  <h4 className="font-bold text-sm text-white">{t.dashboard.quickActions.verifyAmadeus}</h4>
+                  <p className="text-xs text-slate-400 mt-1">{t.dashboard.quickActions.verifyAmadeusDesc}</p>
+                </div>
+                <div onClick={() => notify(t.dashboard.quickActions.actionSuccess)} className="p-4 rounded-xl bg-slate-900 border border-slate-800 hover:border-amber-500/40 cursor-pointer transition">
+                  <h4 className="font-bold text-sm text-white">{t.dashboard.quickActions.scanEndpoints}</h4>
+                  <p className="text-xs text-slate-400 mt-1">{t.dashboard.quickActions.scanEndpointsDesc}</p>
+                </div>
+                <div onClick={() => notify(t.dashboard.quickActions.actionSuccess)} className="p-4 rounded-xl bg-slate-900 border border-slate-800 hover:border-cyan-500/40 cursor-pointer transition">
+                  <h4 className="font-bold text-sm text-white">{t.dashboard.quickActions.generateReport}</h4>
+                  <p className="text-xs text-slate-400 mt-1">{t.dashboard.quickActions.generateReportDesc}</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        );
+      }
+
+      function ChatbotTab({ t, lang }) {
+        const [messages, setMessages] = useState([
+          { id: 1, role: 'assistant', content: t.assistant.initialGreeting, intent: 'GENERAL_QUESTION', cves: [] }
+        ]);
+        const [inputValue, setInputValue] = useState('');
+
+        const handleSend = (text) => {
+          const query = text || inputValue;
+          if (!query.trim()) return;
+
+          const userMsg = { id: Date.now(), role: 'user', content: query };
+          setMessages(prev => [...prev, userMsg]);
+          if (!text) setInputValue('');
+
+          setTimeout(() => {
+            let answer = lang === 'fr' 
+              ? "Une **CVE** (*Common Vulnerabilities and Exposures*) est un identifiant universel attribué aux vulnérabilités connues. Dans le secteur du voyage, les CVE permettent de suivre et corriger rapidement les failles sur les serveurs de réservation et API GDS."
+              : "A **CVE** (*Common Vulnerabilities and Exposures*) is a standardized identifier assigned to publicly disclosed vulnerabilities to ensure travel GDS endpoints remain secure.";
+            
+            const botMsg = { id: Date.now() + 1, role: 'assistant', content: answer, intent: 'CYBER_QUESTION', cves: ['CVE-2025-0168'] };
+            setMessages(prev => [...prev, botMsg]);
+          }, 800);
+        };
+
+        return (
+          <div className="glass-panel rounded-2xl border border-slate-800 flex flex-col h-[600px] overflow-hidden">
+            <div className="px-6 py-4 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
+              <h3 className="font-bold text-white">{t.assistant.title}</h3>
+              <span className="text-xs text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/30">RAG Enabled</span>
+            </div>
+
+            <div className="flex-1 p-6 overflow-y-auto space-y-4">
+              {messages.map(m => (
+                <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
+                  <div className={`max-w-xl p-4 rounded-2xl text-sm ${m.role === 'user' ? 'bg-cyan-600 text-white' : 'bg-slate-900 border border-slate-800 text-slate-200'}`}>
+                    {m.content}
+                    {m.cves && m.cves.length > 0 && (
+                      <div className="mt-2 text-xs text-cyan-400 font-mono">Sources : {m.cves.join(', ')}</div>
+                    )}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="p-3 bg-slate-950 border-t border-slate-800/80 flex flex-wrap gap-2">
+              {t.assistant.promptChips.map((chip, i) => (
+                <button key={i} onClick={() => handleSend(chip)} className="px-3 py-1 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 hover:text-cyan-400 transition">
+                  {chip}
+                </button>
+              ))}
+            </div>
+
+            <form onSubmit={e => { e.preventDefault(); handleSend(); }} className="p-4 bg-slate-900 border-t border-slate-800 flex space-x-3">
+              <input
+                type="text"
+                value={inputValue}
+                onChange={e => setInputValue(e.target.value)}
+                placeholder={t.assistant.inputPlaceholder}
+                className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500"
+              />
+              <button type="submit" className="px-5 py-2.5 rounded-xl bg-cyan-600 text-white font-bold text-sm shadow-md hover:bg-cyan-500">
+                {t.assistant.sendBtn}
+              </button>
+            </form>
+          </div>
+        );
+      }
+
+      function GdsSecurityTab({ t }) {
+        return (
+          <div className="space-y-6">
+            <div className="glass-panel p-6 rounded-2xl border border-slate-800">
+              <h2 className="text-2xl font-bold text-white">{t.gdsSecurity.title}</h2>
+              <p className="text-sm text-slate-400 mt-1">{t.gdsSecurity.subtitle}</p>
+            </div>
+
+            <div className="glass-panel rounded-2xl border border-slate-800 overflow-hidden">
+              <table className="w-full text-left text-sm text-slate-300">
+                <thead className="bg-slate-900 text-xs uppercase tracking-wider text-slate-400">
+                  <tr>
+                    <th className="py-3.5 px-6">Connecteur</th>
+                    <th className="py-3.5 px-6">Type</th>
+                    <th className="py-3.5 px-6">Statut</th>
+                    <th className="py-3.5 px-6">Latence</th>
+                    <th className="py-3.5 px-6">TLS</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-800">
+                  {t.gdsSecurity.systems.map((s, i) => (
+                    <tr key={i} className="hover:bg-slate-900/50">
+                      <td className="py-4 px-6 font-bold text-white">{s.name}</td>
+                      <td className="py-4 px-6 text-slate-400">{s.type}</td>
+                      <td className="py-4 px-6"><span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">{s.status}</span></td>
+                      <td className="py-4 px-6 font-mono text-cyan-400 font-semibold">{s.latency}</td>
+                      <td className="py-4 px-6 font-mono text-xs text-slate-400">{s.tls}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        );
+      }
+
+      function SettingsTab({ t, notify }) {
+        return (
+          <div className="glass-panel p-6 rounded-2xl border border-slate-800 space-y-4 max-w-2xl">
+            <h2 className="text-2xl font-bold text-white">{t.settings.title}</h2>
+            <p className="text-sm text-slate-400">{t.settings.subtitle}</p>
+            <div className="pt-4 space-y-3">
+              <label className="block text-sm font-semibold text-slate-300">{t.settings.llmProviderTitle}</label>
+              <select className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-white">
+                <option>{t.settings.llmProviders.gemini}</option>
+                <option>{t.settings.llmProviders.openai}</option>
+                <option>{t.settings.llmProviders.offline}</option>
+              </select>
+            </div>
+            <button onClick={() => notify(t.settings.saveSuccess)} className="mt-4 px-6 py-2.5 rounded-xl bg-cyan-600 text-white font-bold text-sm hover:bg-cyan-500">
+              {t.settings.saveBtn}
+            </button>
+          </div>
+        );
+      }
+
+      function App() {
+        const [lang, setLang] = useState('fr');
+        const [activeTab, setActiveTab] = useState('dashboard');
+        const [agency, setAgency] = useState('abidjan');
+        const [toast, setToast] = useState(null);
+
+        const t = translations[lang];
+
+        const notify = (msg) => {
+          setToast(msg);
+          setTimeout(() => setToast(null), 3000);
+        };
+
+        return (
+          <div className="min-h-screen bg-[#0B0F17] text-slate-100 flex flex-col font-sans">
+            {toast && (
+              <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl bg-cyan-950 border border-cyan-500 text-cyan-300 text-xs font-bold shadow-2xl">
+                ✓ {toast}
+              </div>
+            )}
+
+            <Header lang={lang} setLang={setLang} agency={agency} setAgency={setAgency} t={t} />
+
+            <div className="flex-1 flex p-6 gap-6 max-w-7xl mx-auto w-full">
+              <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} t={t} />
+              <main className="flex-1 min-w-0">
+                {activeTab === 'dashboard' && <DashboardTab t={t} notify={notify} />}
+                {activeTab === 'assistant' && <ChatbotTab t={t} lang={lang} />}
+                {activeTab === 'gdsSecurity' && <GdsSecurityTab t={t} />}
+                {activeTab === 'settings' && <SettingsTab t={t} notify={notify} />}
+              </main>
+            </div>
+          </div>
+        );
+      }
+
+      ReactDOM.createRoot(document.getElementById('root')).render(<App />);
+    </script>
+  </body>
+</html>
