@@ -221,3 +221,7 @@ __marimo__/
 data/raw/
 data/processed/
 models/
+
+# Frontend dependencies
+frontend/node_modules/
+node_modules/
