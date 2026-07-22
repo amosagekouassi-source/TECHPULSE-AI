@@ -1,50 +1,44 @@
-﻿# TECHPULSE-AI
+# TECHPULSE-AI
 
-TECHPULSE-AI is an AI-powered cybersecurity assistant for travel agencies,
-booking platforms, ticketing providers, and reservation systems. It collects,
-preprocesses, and analyzes vulnerability and incident data to help travel-sector
-teams understand cybersecurity risks and prioritize action.
+TECHPULSE-AI is an AI-powered cybersecurity assistant and continuous monitoring platform for travel agencies, booking platforms, ticketing providers, and reservation systems. It automatically collects, preprocesses, and analyzes vulnerability (CVE) and incident data to help travel-sector teams understand cybersecurity risks and prioritize action in real-time.
 
-> **Current status:** The project includes data ingestion, cybersecurity dataset
-> preprocessing, and a CPU-compatible DistilBERT severity-classification module.
-> GPU training through Google Colab and model hosting on Hugging Face Hub are the
-> recommended next steps.
+> **Current status:** The project features a fully operational, real-time National Vulnerability Database (NVD) monitoring pipeline, a FAISS-backed Retrieval-Augmented Generation (RAG) assistant powered by Gemini (or OpenAI fallback offline mode), a DistilBERT severity classification module, and a unified executive dashboard frontend.
 
 ## Problem Statement
 
-Travel agencies rely on booking engines, ticketing systems, online payments, and
-customer-management tools. These interconnected systems can be affected by
-security vulnerabilities, cyberattacks, and fraud attempts.
+Travel agencies rely on booking engines, ticketing systems, online payments, and customer-management tools. These interconnected systems (e.g., Amadeus, Sabre, GDS, PCI-DSS compliance gateways) handle highly sensitive data (passports, credit cards) and can be affected by security vulnerabilities, cyberattacks, and fraud attempts.
 
-Many small and medium-sized travel organizations do not have a dedicated
-cybersecurity team to continuously monitor emerging threats. TECHPULSE-AI is
-designed to make threat information easier to collect, structure, classify, and
-explore.
+Many small and medium-sized travel organizations do not have a dedicated cybersecurity team to continuously monitor emerging threats. TECHPULSE-AI is designed to automatically filter ambient noise, assess vulnerability criticality, and provide immediately actionable recommendations in natural language before any financial or reputational damage occurs.
 
 ## Features
 
-- GitHub Archive ingestion pipeline for technology intelligence data.
-- NVD CVE preprocessing with dynamic CVSS v4.0, v3.1, and v3.0 metric support.
-- Cybersecurity incident-dataset ingestion and schema unification.
-- Unified TECHPULSE dataset exported as Parquet.
-- JSON preprocessing report with record counts, severity distribution, and
-  missing-value statistics.
-- DistilBERT severity classifier for `LOW`, `MEDIUM`, `HIGH`, and `CRITICAL`.
-- CPU-compatible local training implementation.
-- Modular architecture ready for Sentence Transformers, FAISS, RAG, LLMs, and
-  Streamlit.
+- **Real-Time NVD Monitoring Pipeline:** Continuous ingestion of new CVEs via the NIST NVD API v2 using delta filtering and pagination.
+- **APScheduler Background Jobs:** Automatic data polling (default every 6 hours) running seamlessly in the background.
+- **Dynamic Dataset Updation:** Automatically merges new CVEs into the local Parquet dataset and triggers on-the-fly FAISS vector index rebuilds.
+- **Intent-Driven RAG Assistant:** An advanced conversational AI (powered by Gemini) with a deterministic Intent Router (General Conversation, Global Reports, Cyber Threats).
+- **DistilBERT Severity Classifier:** Automatic severity labeling (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`) using `distilbert-base-uncased`.
+- **Offline Template Engine Fallback:** A robust offline fallback ensures the platform remains partially functional even if the LLM API is rate-limited or revoked.
+- **Streamlit & React Dashboard:** Unified frontend platform for executive reporting, chatting with the AI, and visualizing key risk metrics.
 
 ## Architecture
 
 ```text
 Data Sources
-├── NVD CVE feeds
+├── NVD CVE feeds (Real-time API v2)
 ├── Cybersecurity incident datasets
 └── GitHub Archive
         │
+        ▼ (Scheduled Polling via APScheduler)
+NVDCollector → DatasetUpdater (Merge) → DistilBERT Classifier 
+        │
         ▼
-Collector → Preprocessing → DistilBERT Classifier → Embeddings
-        → FAISS Vector Store → RAG → LLM → Streamlit Dashboard
+techpulse_dataset.parquet → FAISS Vector Store 
+        │
+        ▼ (Intent Routing)
+RAG Pipeline → Gemini LLM (or Offline Fallback)
+        │
+        ▼
+Unified Dashboard (Streamlit / React Frontend)
 ```
 
 ## Project Structure
@@ -52,22 +46,26 @@ Collector → Preprocessing → DistilBERT Classifier → Embeddings
 ```text
 TECHPULSE-AI/
 ├── app/
-│   ├── collector/                  # GitHub Archive ingestion
-│   ├── preprocessing/              # CVE and incident data preparation
+│   ├── agent/                      # RAG and Conversational Pipeline core
+│   ├── analytics/                  # KPIs, scoring, and data analytics engine
 │   ├── classifier/                 # DistilBERT severity classification
-│   ├── embeddings/                 # Future Sentence Transformers layer
-│   ├── vector_store/               # Future FAISS integration
-│   ├── agent/                      # Future AI assistant layer
-│   ├── reports/
-│   ├── dashboard/                  # Future Streamlit application
+│   ├── collector/                  # NVD API v2, GitHub Archive ingestion & APScheduler
+│   ├── dashboard/                  # Streamlit application
+│   ├── embeddings/                 # Sentence Transformers layer
+│   ├── llm/                        # LLM client (Gemini/OpenAI) with Intent prompting
+│   ├── rag/                        # 3-Intent deterministic Router
+│   ├── reports/                    # Document/PDF report generation
+│   ├── vector_store/               # FAISS integration
 │   └── utils/
 ├── data/
 │   ├── raw/                        # Local source datasets, ignored by Git
 │   └── processed/                  # Local Parquet and reports, ignored by Git
-├── models/                          # Local trained models, ignored by Git
-├── docs/
-├── tests/
-├── main.py                          # Preprocessing pipeline entry point
+├── frontend/                       # Modern React web app UI
+├── models/                         # Local trained models, ignored by Git
+├── scripts/
+│   ├── run_collector.py            # CLI for manual NVD collection
+│   └── start_monitoring.py         # Entry point for full monitoring & dashboard
+├── main.py                         # Legacy preprocessing pipeline entry point
 ├── requirements.txt
 ├── README.md
 └── LICENSE
@@ -79,6 +77,7 @@ TECHPULSE-AI/
 
 - Python 3.11 or later
 - Git
+- Node.js & npm (for frontend)
 
 ```bash
 git clone https://github.com/amosagekouassi-source/TECHPULSE-AI.git
@@ -99,52 +98,48 @@ python -m pip install --upgrade pip
 python -m pip install -r requirements.txt
 ```
 
-## Preprocessing Pipeline
+### Environment Variables
 
-Place the local datasets in the following paths:
+Create a `.env` file in the root directory:
 
-```text
-data/raw/cve/nvdcve-2.0-2025.json
-data/raw/cve/nvdcve-2.0-2026.json
-data/raw/incidents/cybersecurity_dataset.csv
-data/raw/incidents/cybersecurity_synthesized_data.csv
+```env
+# Required for natural language generation
+GEMINI_API_KEY=your_gemini_api_key
+
+# Optional: Speeds up NVD collection (50 req/30s vs 5 req/30s)
+NVD_API_KEY=your_nvd_api_key
 ```
 
-Run preprocessing:
+## Usage
+
+### 1. Full Monitoring Platform (Recommended)
+
+Start the APScheduler background job (polls NVD every 6 hours) and the Streamlit dashboard simultaneously:
 
 ```bash
-python main.py
+python scripts/start_monitoring.py
 ```
 
-Generated local artifacts:
+*The dashboard will be available at `http://localhost:8501`.*
 
-```text
-data/processed/techpulse_dataset.parquet
-data/processed/preprocessing_report.json
+### 2. Manual NVD Collection
+
+Trigger an immediate CVE collection from the NVD API manually:
+
+```bash
+python scripts/run_collector.py --hours 24
 ```
 
-## DistilBERT Severity Classifier
+*Options:*
+- `--hours 48` : Collect last 48 hours.
+- `--start 2025-01-01` : Collect since a specific date.
 
-The classifier uses `distilbert-base-uncased` to predict a severity label from
-a security description:
-
-```text
-LOW → 0
-MEDIUM → 1
-HIGH → 2
-CRITICAL → 3
-```
+### 3. DistilBERT Severity Classifier
 
 Run local CPU training:
 
 ```bash
 python -m app.classifier.train
-```
-
-The trained model is saved locally in:
-
-```text
-models/distilbert_severity/
 ```
 
 Run a prediction after training:
@@ -153,45 +148,16 @@ Run a prediction after training:
 python -m app.classifier.predict "Remote code execution vulnerability in Apache"
 ```
 
-Example output:
-
-```json
-{
-  "severity": "CRITICAL",
-  "confidence": 0.93
-}
-```
-
-For faster training, use Google Colab with a GPU and publish the resulting
-model and tokenizer to Hugging Face Hub.
-
 ## Technology Stack
 
-- Python 3.11+
-- pandas and PyArrow
-- PyTorch and Transformers
-- scikit-learn
-- requests
-- Planned: Sentence Transformers, FAISS, Gemini/OpenAI, and Streamlit
-
-## Roadmap
-
-- [x] GitHub Archive collector.
-- [x] CVE and incident preprocessing pipeline.
-- [x] Unified Parquet dataset and preprocessing report.
-- [x] DistilBERT severity-classifier implementation.
-- [ ] GPU training notebook for Google Colab.
-- [ ] Hugging Face Hub model publishing and remote loading.
-- [ ] Sentence Transformer embeddings and FAISS vector store.
-- [ ] Retrieval-Augmented Generation pipeline.
-- [ ] Gemini/OpenAI integration.
-- [ ] Streamlit cybersecurity dashboard.
+- **Backend:** Python 3.11+, APScheduler, pandas, PyArrow, requests
+- **AI / ML:** PyTorch, Transformers, sentence-transformers, scikit-learn, FAISS
+- **LLM:** Google Gemini (`gemini-2.0-flash`) via `google-genai`
+- **Frontend:** Streamlit, React, Vite, Tailwind CSS
 
 ## Data and Model Policy
 
-Raw datasets, generated Parquet files, and trained model artifacts are kept
-local and excluded from Git. This prevents oversized files from blocking GitHub
-pushes and keeps the source repository lightweight.
+Raw datasets, generated Parquet files, `node_modules`, and trained model artifacts are kept local and excluded from Git. This prevents oversized files from blocking GitHub pushes and keeps the source repository lightweight.
 
 ## License
 
