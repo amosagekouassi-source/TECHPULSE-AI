@@ -19,3 +19,4 @@ faiss-cpu
 streamlit
 google-genai
 openai
+apscheduler>=3.10
