@@ -47,8 +47,9 @@ export default function ChatbotTab({ t, lang }) {
     }]);
 
     try {
-      // Connexion à votre API FastAPI / Python (ex: http://localhost:8000/api/chat)
-      const response = await fetch('http://localhost:8000/api/chat', {
+      // Connexion à l'API FastAPI en production sur Render
+      const apiUrl = import.meta.env.VITE_API_URL || 'https://techpulse-ai-sm13.onrender.com/api/chat';
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ message: query, lang: lang })
