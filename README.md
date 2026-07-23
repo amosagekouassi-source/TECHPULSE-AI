@@ -1,164 +1,159 @@
-# TECHPULSE-AI
+# 🛡️ TECHPULSE-AI — Cyber Intelligence & RAG Platform for Travel Tech
 
-TECHPULSE-AI is an AI-powered cybersecurity assistant and continuous monitoring platform for travel agencies, booking platforms, ticketing providers, and reservation systems. It automatically collects, preprocesses, and analyzes vulnerability (CVE) and incident data to help travel-sector teams understand cybersecurity risks and prioritize action in real-time.
+![License](https://img.shields.io/badge/License-MIT-blue.svg)
+![Python](https://img.shields.io/badge/Python-3.10%2B-blue)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.100%2B-green)
+![React](https://img.shields.io/badge/Frontend-React%20%7C%20Vite-61dafb)
+![Render](https://img.shields.io/badge/Backend-Live%20on%20Render-informational)
+![Vercel](https://img.shields.io/badge/Frontend-Live%20on%20Vercel-black)
 
-> **Current status:** The project features a fully operational, real-time National Vulnerability Database (NVD) monitoring pipeline, a FAISS-backed Retrieval-Augmented Generation (RAG) assistant powered by Gemini (or OpenAI fallback offline mode), a DistilBERT severity classification module, and a unified executive dashboard frontend.
+**TECHPULSE-AI** is an AI-powered SaaS cyber intelligence and continuous threat monitoring platform designed specifically for the travel sector (airports, travel agencies, reservation engines, and GDS software like Amadeus & Sabre).
 
-## Problem Statement
+It automatically ingests, filters, and analyzes vulnerability data (NVD CVEs), classifies threat severities locally via DistilBERT, and provides a resilient conversational RAG agent (Gemini 2.0 + Groq LLaMA 3.3 70B Fallback).
 
-Travel agencies rely on booking engines, ticketing systems, online payments, and customer-management tools. These interconnected systems (e.g., Amadeus, Sabre, GDS, PCI-DSS compliance gateways) handle highly sensitive data (passports, credit cards) and can be affected by security vulnerabilities, cyberattacks, and fraud attempts.
+---
 
-Many small and medium-sized travel organizations do not have a dedicated cybersecurity team to continuously monitor emerging threats. TECHPULSE-AI is designed to automatically filter ambient noise, assess vulnerability criticality, and provide immediately actionable recommendations in natural language before any financial or reputational damage occurs.
+## 🌐 Live Deployments
 
-## Features
+- 🎨 **Frontend (React UI) :** [https://techpulse-ai-seven.vercel.app](https://techpulse-ai-seven.vercel.app)
+- ⚙️ **Backend API (FastAPI) :** [https://techpulse-ai-sm13.onrender.com](https://techpulse-ai-sm13.onrender.com)
 
-- **Real-Time NVD Monitoring Pipeline:** Continuous ingestion of new CVEs via the NIST NVD API v2 using delta filtering and pagination.
-- **APScheduler Background Jobs:** Automatic data polling (default every 6 hours) running seamlessly in the background.
-- **Dynamic Dataset Updation:** Automatically merges new CVEs into the local Parquet dataset and triggers on-the-fly FAISS vector index rebuilds.
-- **Intent-Driven RAG Assistant:** An advanced conversational AI (powered by Gemini) with a deterministic Intent Router (General Conversation, Global Reports, Cyber Threats).
-- **DistilBERT Severity Classifier:** Automatic severity labeling (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`) using `distilbert-base-uncased`.
-- **Offline Template Engine Fallback:** A robust offline fallback ensures the platform remains partially functional even if the LLM API is rate-limited or revoked.
-- **Streamlit & React Dashboard:** Unified frontend platform for executive reporting, chatting with the AI, and visualizing key risk metrics.
+---
 
-## Architecture
+## 🚀 Key Features
+
+- **Automated NVD Ingestion Pipeline:** Fetches and cleans real-time CVE vulnerabilities from the NIST NVD API v2, filtering travel-related infrastructure (Amadeus, Sabre, Galileo, PCI-DSS).
+- **Resilient Multi-LLM RAG Engine:** 
+  - Uses `all-MiniLM-L6-v2` embeddings with a **FAISS** vector store for fast, semantic context retrieval.
+  - Features an **automatic multi-key rotation** (5 Gemini API keys) with seamless **fallback to Groq LLaMA-3.3-70B** in case of quota depletion (99.9% uptime).
+- **DistilBERT Severity Classifier:** Supervised local Machine Learning model (`distilbert-base-uncased`) trained to classify threat levels (`LOW`, `MEDIUM`, `HIGH`, `CRITICAL`).
+- **Deterministic Intent Router:** Protects the agent against prompt injection and off-topic queries by routing user messages to specific pipelines (`GENERAL_QUESTION`, `GLOBAL_REPORT`, `CYBER_THREAT`).
+- **Modern Executive Dashboard:** React/Vite frontend with dark mode glassmorphism UI, real-time threat KPIs, and RAG Chatbot.
+
+---
+
+## 🏗️ System Architecture
 
 ```text
-Data Sources
-├── NVD CVE feeds (Real-time API v2)
-├── Cybersecurity incident datasets
-└── GitHub Archive
-        │
-        ▼ (Scheduled Polling via APScheduler)
-NVDCollector → DatasetUpdater (Merge) → DistilBERT Classifier 
-        │
-        ▼
-techpulse_dataset.parquet → FAISS Vector Store 
-        │
-        ▼ (Intent Routing)
-RAG Pipeline → Gemini LLM (or Offline Fallback)
-        │
-        ▼
-Unified Dashboard (Streamlit / React Frontend)
+               +----------------------------------+
+               |  NIST National Vulnerability     |
+               |       Database (NVD API v2)      |
+               +----------------------------------+
+                                |
+                                v
+               +----------------------------------+
+               |  nvd_collector.py (Filtering)    |
+               +----------------------------------+
+                                |
+        +-----------------------+-----------------------+
+        |                                               |
+        v                                               v
++-----------------------+               +-------------------------------+
+| DistilBERT Classifier |               | SentenceTransformers (MiniLM) |
+| (Severity Prediction) |               +-------------------------------+
++-----------------------+                               |
+                                                        v
+                                                +---------------+
+                                                |  FAISS Index  |
+                                                +---------------+
+                                                        |
+                                                        v
++-----------------------+                       +---------------+
+| React Frontend UI     | <===================> | FastAPI Server|
+| (Deployed on Vercel)  |    REST HTTP API      | (on Render)   |
++-----------------------+                       +---------------+
+                                                        |
+                                                        v
+                                        +-------------------------------+
+                                        | Multi-LLM Fallback Engine     |
+                                        | 1. Gemini 2.0 Flash (Rotation)|
+                                        | 2. Groq LLaMA 3.3 70B (Relay) |
+                                        +-------------------------------+
 ```
 
-## Project Structure
+---
+
+## 📁 Repository Structure
 
 ```text
 TECHPULSE-AI/
 ├── app/
 │   ├── agent/                      # RAG and Conversational Pipeline core
-│   ├── analytics/                  # KPIs, scoring, and data analytics engine
-│   ├── classifier/                 # DistilBERT severity classification
-│   ├── collector/                  # NVD API v2, GitHub Archive ingestion & APScheduler
-│   ├── dashboard/                  # Streamlit application
-│   ├── embeddings/                 # Sentence Transformers layer
-│   ├── llm/                        # LLM client (Gemini/OpenAI) with Intent prompting
-│   ├── rag/                        # 3-Intent deterministic Router
-│   ├── reports/                    # Document/PDF report generation
-│   ├── vector_store/               # FAISS integration
-│   └── utils/
-├── data/
-│   ├── raw/                        # Local source datasets, ignored by Git
-│   └── processed/                  # Local Parquet and reports, ignored by Git
-├── frontend/                       # Modern React web app UI
-├── models/                         # Local trained models, ignored by Git
+│   ├── analytics/                  # KPIs and scoring engine
+│   ├── classifier/                 # DistilBERT supervised fine-tuning & evaluation
+│   ├── collector/                  # NVD API v2 ingestion scripts
+│   ├── embeddings/                 # SentenceTransformers (MiniLM) vectorizer
+│   ├── llm/                        # Multi-LLM client (Gemini & Groq Fallback)
+│   ├── rag/                        # Intent Router & FAISS Retriever
+│   └── vector_store/               # FAISS index management
+├── frontend/                       # React / Vite / Tailwind UI source code
 ├── scripts/
-│   ├── run_collector.py            # CLI for manual NVD collection
-│   └── start_monitoring.py         # Entry point for full monitoring & dashboard
-├── main.py                         # Legacy preprocessing pipeline entry point
-├── requirements.txt
-├── README.md
-└── LICENSE
+│   └── run_collector.py            # CLI for manual CVE collection
+├── server.py                       # FastAPI production entry point
+├── requirements.txt                # Python dependencies
+└── README.md
 ```
 
-## Installation
+---
 
-### Prerequisites
+## 🛠️ Local Installation & Development
 
-- Python 3.11 or later
-- Git
-- Node.js & npm (for frontend)
+### 1. Prerequisites
+- Python 3.10 or higher
+- Node.js 18+ (for frontend development)
 
+### 2. Clone & Setup Backend
 ```bash
 git clone https://github.com/amosagekouassi-source/TECHPULSE-AI.git
 cd TECHPULSE-AI
+
+# Create virtual environment
 python -m venv venv
+# On Windows:
+.\venv\Scripts\activate
+# On Linux/macOS:
+source venv/bin/activate
+
+# Install dependencies
+pip install -r requirements.txt
 ```
 
-Windows PowerShell:
-
-```powershell
-.\venv\Scripts\Activate.ps1
-```
-
-Install dependencies:
-
-```bash
-python -m pip install --upgrade pip
-python -m pip install -r requirements.txt
-```
-
-### Environment Variables
-
-Create a `.env` file in the root directory:
-
+### 3. Environment Variables Setup
+Create a `.env` file in the project root:
 ```env
-# Required for natural language generation
-GEMINI_API_KEY=your_gemini_api_key
-
-# Optional: Speeds up NVD collection (50 req/30s vs 5 req/30s)
-NVD_API_KEY=your_nvd_api_key
+GEMINI_API_KEY=your_gemini_key_here
+GROQ_API_KEY=your_groq_key_here
+PORT=8000
 ```
 
-## Usage
-
-### 1. Full Monitoring Platform (Recommended)
-
-Start the APScheduler background job (polls NVD every 6 hours) and the Streamlit dashboard simultaneously:
-
+### 4. Run Backend Server locally
 ```bash
-python scripts/start_monitoring.py
+python server.py
 ```
+*Server will start at `http://127.0.0.1:8000`.*
 
-*The dashboard will be available at `http://localhost:8501`.*
-
-### 2. Manual NVD Collection
-
-Trigger an immediate CVE collection from the NVD API manually:
-
+### 5. Run Frontend locally
 ```bash
-python scripts/run_collector.py --hours 24
+cd frontend
+npm install
+npm run dev
 ```
+*Frontend will be accessible at `http://localhost:5173`.*
 
-*Options:*
-- `--hours 48` : Collect last 48 hours.
-- `--start 2025-01-01` : Collect since a specific date.
+---
 
-### 3. DistilBERT Severity Classifier
+## 🧪 Model Training & Evaluation
 
-Run local CPU training:
+To train the DistilBERT severity classification model locally:
 
 ```bash
 python -m app.classifier.train
 ```
 
-Run a prediction after training:
+Evaluation metrics (Accuracy, Precision, Recall, F1-Score) and confusion matrix artifacts will be exported to `models/training_metrics.json`.
 
-```bash
-python -m app.classifier.predict "Remote code execution vulnerability in Apache"
-```
+---
 
-## Technology Stack
+## 📜 License
 
-- **Backend:** Python 3.11+, APScheduler, pandas, PyArrow, requests
-- **AI / ML:** PyTorch, Transformers, sentence-transformers, scikit-learn, FAISS
-- **LLM:** Google Gemini (`gemini-2.0-flash`) via `google-genai`
-- **Frontend:** Streamlit, React, Vite, Tailwind CSS
-
-## Data and Model Policy
-
-Raw datasets, generated Parquet files, `node_modules`, and trained model artifacts are kept local and excluded from Git. This prevents oversized files from blocking GitHub pushes and keeps the source repository lightweight.
-
-## License
-
-This project is distributed under the [MIT License](LICENSE).
+Distributed under the **MIT License**. See `LICENSE` for more information.
