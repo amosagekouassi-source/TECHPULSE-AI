@@ -11,7 +11,7 @@ from typing import Optional, List
 LOGGER = logging.getLogger("server")
 logging.basicConfig(level=logging.INFO)
 
-app = FastAPI(title="TECHPULSE-AI Backend API", version="2.7.0")
+app = FastAPI(title="TECHPULSE-AI Backend API", version="2.8.0")
 
 # Autoriser le Frontend React (CORS)
 app.add_middleware(
@@ -108,7 +108,7 @@ class LoginRequest(BaseModel):
 # ---------------------------------------------------------------------------
 @app.get("/")
 def read_root():
-    return {"status": "online", "system": "TECHPULSE-AI RAG Server V2.7 (Multi-Key Gemini + SQLite)"}
+    return {"status": "online", "system": "TECHPULSE-AI RAG Server V2.8 (Strict Domain Intent Dispatcher)"}
 
 @app.post("/api/login")
 async def login_endpoint(req: LoginRequest):
@@ -150,7 +150,16 @@ async def chat_endpoint(req: ChatRequest):
     user_msg_id = int(os.urandom(4).hex(), 16)
     save_message(user_msg_id, "user", user_msg)
 
-    # 2. Generate Assistant Response with Multi-Key Rotation
+    # 2. Intent Analysis
+    q_lower = user_msg.lower().strip()
+
+    is_report = any(r in q_lower for r in ["rapport", "bilan", "24h", "dernières", "derniers", "synthèse", "statistique"])
+    is_fraud_payment = any(f in q_lower for f in ["fraude", "carte", "paiement", "pci", "banque", "cb"])
+    is_gds_security = any(s in q_lower for s in ["amadeus", "sabre", "gds", "sécuris", "securis", "connecteur"])
+    is_incident = any(i in q_lower for i in ["critique", "rce", "ransomware", "attaque", "exploit", "cve-"])
+    is_greeting_only = q_lower in ["bonjour", "salut", "hello", "coucou", "hey", "bonjour !", "salut !", "bonsoir"]
+
+    # 3. Generate Assistant Response with Multi-Key Rotation
     api_keys = get_api_keys()
     bot_response_text = ""
     bot_intent = "DYNAMIC"
@@ -158,10 +167,7 @@ async def chat_endpoint(req: ChatRequest):
 
     system_instruction = (
         "Tu es TECHPULSE-AI, un assistant virtuel expert en cybersécurité pour le secteur du tourisme et du voyage. "
-        "CONSIGNE STRICTE DE RÉPONSE :\n"
-        "1. Si la question concerne un RAPPORT ou un BILAN (ex: 'rapport des 24h'), réponds directement avec une synthèse complète des alertes, du statut des API GDS (Amadeus/Sabre) et du score de risque. Ne fais PAS une simple salutation !\n"
-        "2. Si la question concerne la FRAUDE, la carte bancaire ou PCI-DSS, réponds avec des mesures concrètes (Tokenisation, Chiffrement AES-256, mTLS, WAF).\n"
-        "3. Si c'est une simple salutation (ex: 'bonjour'), réponds brièvement de manière courtoise."
+        "Ne commence JAMAIS ta réponse par une formule de politesse générique si la question porte sur un sujet précis (rapport, fraude, API GDS, incident)."
     )
 
     for key in api_keys:
@@ -187,16 +193,10 @@ async def chat_endpoint(req: ChatRequest):
         except Exception as err:
             LOGGER.warning(f"Gemini API key rotation fallback (Error: {err}). Trying next key if available...")
 
-    # Enhanced Dynamic Fallback Engine if API unavailable or generic response
-    q_lower = user_msg.lower().strip()
+    # 4. Strict Domain Override: If API generated a generic intro OR is offline, enforce expert domain answer!
+    has_generic_intro = "bonjour ! je suis" in bot_response_text.lower() or "comment puis-je vous aider" in bot_response_text.lower()
 
-    is_report = any(r in q_lower for r in ["rapport", "bilan", "24h", "dernières", "derniers", "synthèse"])
-    is_fraud_payment = any(f in q_lower for f in ["fraude", "carte", "paiement", "pci", "banque", "cb"])
-    is_gds_security = any(s in q_lower for s in ["amadeus", "sabre", "gds", "sécuris", "securis"])
-    is_incident = any(i in q_lower for i in ["critique", "rce", "ransomware", "attaque", "exploit", "cve-"])
-    is_greeting_only = q_lower in ["bonjour", "salut", "hello", "coucou", "hey", "bonjour !", "salut !"]
-
-    if not bot_response_text or (is_report and "Bonjour ! Je suis TECHPULSE-AI" in bot_response_text):
+    if not bot_response_text or (not is_greeting_only and has_generic_intro):
         if is_report:
             bot_response_text = (
                 "📊 **Bilan d'Activité Cyber & Supervision (Dernières 24h) :**\n\n"
@@ -216,14 +216,24 @@ async def chat_endpoint(req: ChatRequest):
             )
             bot_intent = "PREVENTIVE_SECURITY"
             bot_cves = []
+        elif is_gds_security:
+            bot_response_text = (
+                "Pour sécuriser les intégrations et API de réservation de votre agence de voyage (Amadeus, Sabre, Galileo) :\n\n"
+                "1. **Authentification & Muting Token** : Utilisez des jetons OAuth 2.0 à durée de vie courte (15 minutes max).\n"
+                "2. **Mutual TLS (mTLS)** : Exigez des certificats bi-directionnels pour sécuriser l'ensemble des webhooks GDS.\n"
+                "3. **Rate Limiting Stricte** : Limitez le nombre de requêtes par minute pour empêcher la collecte automatisée de tarifs et d'inventaires.\n"
+                "4. **Audit Centralisé & PCI-DSS** : Chiffrez les données de paiement et les PNR voyageurs au repos et en transit."
+            )
+            bot_intent = "PREVENTIVE_SECURITY"
+            bot_cves = []
         elif is_incident:
             bot_response_text = (
-                "🚨 **Protocol d'Urgence Cyber Déclenché :**\n\n"
-                "Une menace critique ou tentative d'exploitation RCE a été détectée sur votre serveur de réservation.\n\n"
-                "**Mesures Immédiates :**\n"
-                "1. Placement du WAF en mode blocage strict.\n"
-                "2. Révocation des jetons d'accès API GDS.\n"
-                "3. Isolation réseau de l'hôte impacté."
+                "🚨 **Alerte d'Analyse de Menace Critique** (référencée dans CVE-2026-5814)\n\n"
+                "Une vulnérabilité ou attaque active a été identifiée sur vos systèmes de réservation. Risque majeur de prise de contrôle et d'exfiltration de données voyageurs.\n\n"
+                "**Plan d'Action Immédiat :**\n"
+                "- **Isolation Réseau** : Isolez la machine hôte et placez le serveur derrière un WAF en mode blocage strict.\n"
+                "- **Révocation des Identifiants** : Réinitialisez immédiatement toutes les clés d'API et jetons d'accès GDS.\n"
+                "- **Patching d'Urgence** : Appliquez les correctifs de sécurité éditeur sans délai."
             )
             bot_intent = "CYBER_INCIDENT"
             bot_cves = ["CVE-2026-5814"]
@@ -232,7 +242,7 @@ async def chat_endpoint(req: ChatRequest):
             bot_intent = "GENERAL_QUESTION"
             bot_cves = []
 
-    # 3. Store Assistant Message in SQLite
+    # 5. Store Assistant Message in SQLite
     bot_msg_id = user_msg_id + 1
     save_message(bot_msg_id, "assistant", bot_response_text, bot_intent, bot_cves)
 
