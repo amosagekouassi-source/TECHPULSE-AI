@@ -11,7 +11,7 @@ from typing import Optional, List
 LOGGER = logging.getLogger("server")
 logging.basicConfig(level=logging.INFO)
 
-app = FastAPI(title="TECHPULSE-AI Backend API", version="2.5.0")
+app = FastAPI(title="TECHPULSE-AI Backend API", version="2.6.0")
 
 # Autoriser le Frontend React (CORS)
 app.add_middleware(
@@ -82,6 +82,17 @@ def clear_all_messages():
     conn.close()
 
 # ---------------------------------------------------------------------------
+# Multi-Key API Rotation Helper
+# ---------------------------------------------------------------------------
+def get_api_keys() -> List[str]:
+    keys = []
+    for var in ["GEMINI_API_KEY", "GOOGLE_API_KEY", "GEMINI_API_KEY_2", "GEMINI_API_KEY_3"]:
+        val = os.getenv(var)
+        if val and val.strip() and val not in keys:
+            keys.append(val.strip())
+    return keys
+
+# ---------------------------------------------------------------------------
 # API Schemas
 # ---------------------------------------------------------------------------
 class ChatRequest(BaseModel):
@@ -97,11 +108,10 @@ class LoginRequest(BaseModel):
 # ---------------------------------------------------------------------------
 @app.get("/")
 def read_root():
-    return {"status": "online", "system": "TECHPULSE-AI RAG Server with SQLite Persistence"}
+    return {"status": "online", "system": "TECHPULSE-AI RAG Server V2.6 (Multi-Key Gemini + SQLite)"}
 
 @app.post("/api/login")
 async def login_endpoint(req: LoginRequest):
-    # Flexible authentication for demo
     valid_emails = ["admin@techpulse.ai", "admin", "user@techpulse.ai"]
     valid_passwords = ["admin", "techpulse2026", "password"]
 
@@ -140,17 +150,17 @@ async def chat_endpoint(req: ChatRequest):
     user_msg_id = int(os.urandom(4).hex(), 16)
     save_message(user_msg_id, "user", user_msg)
 
-    # 2. Generate Assistant Response
-    api_key = os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    # 2. Generate Assistant Response with Multi-Key Rotation
+    api_keys = get_api_keys()
     bot_response_text = ""
     bot_intent = "DYNAMIC"
     bot_cves = []
 
-    if api_key:
+    for key in api_keys:
         try:
             try:
                 import google.genai as genai
-                client = genai.Client(api_key=api_key)
+                client = genai.Client(api_key=key)
                 system_instruction = (
                     "Tu es TECHPULSE-AI, un assistant virtuel expert en cybersécurité pour le secteur du tourisme et du voyage. "
                     "Réponds de façon fluide, professionnelle, naturelle et adaptée à la demande de l'utilisateur. "
@@ -162,9 +172,10 @@ async def chat_endpoint(req: ChatRequest):
                     contents=prompt
                 )
                 bot_response_text = response.text
+                break
             except Exception:
                 import google.generativeai as genai
-                genai.configure(api_key=api_key)
+                genai.configure(api_key=key)
                 model = genai.GenerativeModel("gemini-1.5-flash")
                 system_instruction = (
                     "Tu es TECHPULSE-AI, un assistant virtuel expert en cybersécurité pour le secteur du tourisme et du voyage. "
@@ -174,10 +185,11 @@ async def chat_endpoint(req: ChatRequest):
                 prompt = f"{system_instruction}\n\nQuestion de l'utilisateur ({req.lang}) : {user_msg}"
                 response = model.generate_content(prompt)
                 bot_response_text = response.text
+                break
         except Exception as err:
-            LOGGER.warning(f"Direct Gemini API error: {err}. Falling back to decision matrix.")
+            LOGGER.warning(f"Gemini API key rotation fallback (Error: {err}). Trying next key if available...")
 
-    # Dynamic fallback if no API response generated
+    # Dynamic fallback if no API response generated (All keys exhausted or offline)
     if not bot_response_text:
         q_lower = user_msg.lower()
         if any(g in q_lower.strip() for g in ["bonjour", "salut", "hello", "coucou", "hey"]):

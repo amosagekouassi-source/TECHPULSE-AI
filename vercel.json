@@ -1,0 +1,16 @@
+{
+  "version": 2,
+  "name": "techpulse-ai-frontend",
+  "builds": [
+    {
+      "src": "frontend/index.html",
+      "use": "@vercel/static"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "/frontend/index.html"
+    }
+  ]
+}
