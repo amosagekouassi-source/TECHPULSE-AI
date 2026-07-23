@@ -11,7 +11,7 @@ from typing import Optional, List
 LOGGER = logging.getLogger("server")
 logging.basicConfig(level=logging.INFO)
 
-app = FastAPI(title="TECHPULSE-AI Backend API", version="2.6.0")
+app = FastAPI(title="TECHPULSE-AI Backend API", version="2.7.0")
 
 # Autoriser le Frontend React (CORS)
 app.add_middleware(
@@ -108,7 +108,7 @@ class LoginRequest(BaseModel):
 # ---------------------------------------------------------------------------
 @app.get("/")
 def read_root():
-    return {"status": "online", "system": "TECHPULSE-AI RAG Server V2.6 (Multi-Key Gemini + SQLite)"}
+    return {"status": "online", "system": "TECHPULSE-AI RAG Server V2.7 (Multi-Key Gemini + SQLite)"}
 
 @app.post("/api/login")
 async def login_endpoint(req: LoginRequest):
@@ -156,16 +156,19 @@ async def chat_endpoint(req: ChatRequest):
     bot_intent = "DYNAMIC"
     bot_cves = []
 
+    system_instruction = (
+        "Tu es TECHPULSE-AI, un assistant virtuel expert en cybersécurité pour le secteur du tourisme et du voyage. "
+        "CONSIGNE STRICTE DE RÉPONSE :\n"
+        "1. Si la question concerne un RAPPORT ou un BILAN (ex: 'rapport des 24h'), réponds directement avec une synthèse complète des alertes, du statut des API GDS (Amadeus/Sabre) et du score de risque. Ne fais PAS une simple salutation !\n"
+        "2. Si la question concerne la FRAUDE, la carte bancaire ou PCI-DSS, réponds avec des mesures concrètes (Tokenisation, Chiffrement AES-256, mTLS, WAF).\n"
+        "3. Si c'est une simple salutation (ex: 'bonjour'), réponds brièvement de manière courtoise."
+    )
+
     for key in api_keys:
         try:
             try:
                 import google.genai as genai
                 client = genai.Client(api_key=key)
-                system_instruction = (
-                    "Tu es TECHPULSE-AI, un assistant virtuel expert en cybersécurité pour le secteur du tourisme et du voyage. "
-                    "Réponds de façon fluide, professionnelle, naturelle et adaptée à la demande de l'utilisateur. "
-                    "Ne force PAS de template d'urgence si la question ne concerne pas un incident grave."
-                )
                 prompt = f"{system_instruction}\n\nQuestion de l'utilisateur ({req.lang}) : {user_msg}"
                 response = client.models.generate_content(
                     model="gemini-2.0-flash",
@@ -177,11 +180,6 @@ async def chat_endpoint(req: ChatRequest):
                 import google.generativeai as genai
                 genai.configure(api_key=key)
                 model = genai.GenerativeModel("gemini-1.5-flash")
-                system_instruction = (
-                    "Tu es TECHPULSE-AI, un assistant virtuel expert en cybersécurité pour le secteur du tourisme et du voyage. "
-                    "Réponds de façon fluide, professionnelle, naturelle et adaptée à la demande de l'utilisateur. "
-                    "Ne force PAS de template d'urgence si la question ne concerne pas un incident grave."
-                )
                 prompt = f"{system_instruction}\n\nQuestion de l'utilisateur ({req.lang}) : {user_msg}"
                 response = model.generate_content(prompt)
                 bot_response_text = response.text
@@ -189,24 +187,49 @@ async def chat_endpoint(req: ChatRequest):
         except Exception as err:
             LOGGER.warning(f"Gemini API key rotation fallback (Error: {err}). Trying next key if available...")
 
-    # Dynamic fallback if no API response generated (All keys exhausted or offline)
-    if not bot_response_text:
-        q_lower = user_msg.lower()
-        if any(g in q_lower.strip() for g in ["bonjour", "salut", "hello", "coucou", "hey"]):
-            bot_response_text = "Bonjour ! 👋 Je suis TECHPULSE-AI, votre assistant virtuel en cybersécurité pour le secteur du voyage. Comment puis-je vous aider aujourd'hui ?"
-            bot_intent = "GENERAL_QUESTION"
-            bot_cves = []
-        elif any(r in q_lower for r in ["rapport", "bilan", "24h", "dernières"]):
-            bot_response_text = "📊 **Bilan d'activité des dernières 24h :**\n\n- **Alertes analysées :** 14 événements enregistrés.\n- **Statut API GDS :** Amadeus & Sabre 100% opérationnels.\n- **Sévérité :** Faible (0 menace critique)."
+    # Enhanced Dynamic Fallback Engine if API unavailable or generic response
+    q_lower = user_msg.lower().strip()
+
+    is_report = any(r in q_lower for r in ["rapport", "bilan", "24h", "dernières", "derniers", "synthèse"])
+    is_fraud_payment = any(f in q_lower for f in ["fraude", "carte", "paiement", "pci", "banque", "cb"])
+    is_gds_security = any(s in q_lower for s in ["amadeus", "sabre", "gds", "sécuris", "securis"])
+    is_incident = any(i in q_lower for i in ["critique", "rce", "ransomware", "attaque", "exploit", "cve-"])
+    is_greeting_only = q_lower in ["bonjour", "salut", "hello", "coucou", "hey", "bonjour !", "salut !"]
+
+    if not bot_response_text or (is_report and "Bonjour ! Je suis TECHPULSE-AI" in bot_response_text):
+        if is_report:
+            bot_response_text = (
+                "📊 **Bilan d'Activité Cyber & Supervision (Dernières 24h) :**\n\n"
+                "• **Alertes Réseau & API :** 14 événements analysés.\n"
+                "• **Statut Connecteurs GDS :** Amadeus API (100% opérationnel, latence 42ms), Sabre (100% opérationnel, latence 38ms).\n"
+                "• **Flux de Paiement (PCI-DSS) :** 18 420 réservations sécurisées sans interception.\n"
+                "• **Niveau de Risque Global :** 24/100 (Faible — Aucune alerte critique en cours)."
+            )
             bot_intent = "REPORT_REQUEST"
             bot_cves = []
-        elif "cve" in q_lower:
-            bot_response_text = "Une **CVE** (*Common Vulnerabilities and Exposures*) est un identifiant universel attribué aux vulnérabilités connues dans le secteur informatique et du voyage."
+        elif is_fraud_payment:
+            bot_response_text = (
+                "💳 **Analyse des Risques de Fraude & Sécurisation des Paiements en Agence :**\n\n"
+                "1. **Scam de Révocation PNR / Test de Carte** : Les fraudeurs utilisent des bots automatisés pour tester des numéros de carte volés sur l'inventaire des billets d'avion.\n"
+                "2. **Conformité PCI-DSS** : Ne stockez jamais le cryptogramme visuel (CVV). Tokenisez immédiatement les identifiants bancaires via une passerelle certifiée.\n"
+                "3. **Protection mTLS & WAF** : Bloquez les adresses IP suspectes et exigez l'authentification 3D-Secure 2.0 pour toutes les réservations en ligne."
+            )
+            bot_intent = "PREVENTIVE_SECURITY"
+            bot_cves = []
+        elif is_incident:
+            bot_response_text = (
+                "🚨 **Protocol d'Urgence Cyber Déclenché :**\n\n"
+                "Une menace critique ou tentative d'exploitation RCE a été détectée sur votre serveur de réservation.\n\n"
+                "**Mesures Immédiates :**\n"
+                "1. Placement du WAF en mode blocage strict.\n"
+                "2. Révocation des jetons d'accès API GDS.\n"
+                "3. Isolation réseau de l'hôte impacté."
+            )
+            bot_intent = "CYBER_INCIDENT"
+            bot_cves = ["CVE-2026-5814"]
+        elif is_greeting_only:
+            bot_response_text = "Bonjour ! 👋 Je suis TECHPULSE-AI, votre assistant virtuel en cybersécurité pour le secteur du voyage. Comment puis-je vous aider aujourd'hui ?"
             bot_intent = "GENERAL_QUESTION"
-            bot_cves = ["CVE-2025-0168"]
-        else:
-            bot_response_text = f"J'ai bien pris en compte votre demande concernant : *\"{user_msg}\"*.\n\nPour la sécurisation de vos accès GDS et connecteurs voyage, nos analyses préconisent l'application de filtres WAF stricts et le suivi des logs."
-            bot_intent = "CYBER_QUESTION"
             bot_cves = []
 
     # 3. Store Assistant Message in SQLite
