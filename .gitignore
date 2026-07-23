@@ -225,3 +225,11 @@ models/
 # Frontend dependencies
 frontend/node_modules/
 node_modules/
+
+# Defense, slide & internal report documents
+*.pptx
+~$*
+guide_soutenance_et_demo.md
+rapport_avancement.md
+capstone_evaluation_guide.md
+
