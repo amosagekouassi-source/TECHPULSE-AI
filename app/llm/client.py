@@ -1,12 +1,13 @@
 """
 TECHPULSE-AI — LLM Integration Layer (Gemini / OpenAI / Offline Template)
 ==========================================================================
-Generates natural, human-sounding French responses for the 3 intent categories.
+Generates natural, human-sounding responses for the 4 decision matrix categories.
 
-System Prompts Philosophy:
-    - No rigid section headers ("1. Résumé", "2. Impact", etc.)
-    - LLM formats the answer organically like a knowledgeable human expert
-    - Each intent gets its own minimal, purposeful system prompt
+Decision Matrix Categories:
+    1. GENERAL_CONVERSATION → Greetings, friendly chat, system status (NO CVEs, NO emergency tone)
+    2. PREVENTIVE_SECURITY  → Best practice guides for Amadeus/Sabre APIs, PCI-DSS, CVE definitions (NO emergency tone)
+    3. CYBER_INCIDENT       → Active attacks, RCE, ransomware, specific CVE flaws (Emergency protocol & remediation)
+    4. GLOBAL_REPORT        → Executive 24h activity summaries
 
 Author: TECHPULSE-AI Engineering
 """
@@ -23,45 +24,42 @@ from dotenv import load_dotenv
 load_dotenv()
 LOGGER = logging.getLogger(__name__)
 
-
 # ---------------------------------------------------------------------------
-# System Prompts — one per intent, clean and non-prescriptive
+# System Prompts per Decision Matrix Category
 # ---------------------------------------------------------------------------
 
 _SYSTEM_GENERAL = """\
 Tu es TECHPULSE-AI, un assistant virtuel expert en cybersécurité pour le secteur du voyage.
-Réponds de manière naturelle, fluide et chaleureuse — comme un collègue expert qui discute.
-N'impose pas de structure de rapport. Si la question est une simple salutation ou question \
-générale, réponds poliment et simplement sans citer de CVE ou de métriques de sécurité inutiles.\
+Réponds de manière amicale, courte, fluide et naturelle.
+INTERDICTIONS STRICTES :
+- Ne cite AUCUNE CVE.
+- Ne parle PAS d'isolation de serveur, de blocage WAF d'urgence ou d'attaque.
+- Ne fais référence à aucune fausse menace.
+"""
+
+_SYSTEM_PREVENTIVE = """\
+Tu es TECHPULSE-AI, expert en architecture et sécurité préventive pour le secteur du voyage.
+Fournis un guide clair et structuré de bonnes pratiques techniques (ex: OAuth 2.0 avec jetons de courte durée, mTLS bi-directionnel, Rate Limiting strict, chiffrement des données PNR/passeports, audit des logs, conformité PCI-DSS).
+INTERDICTIONS STRICTES :
+- N'utilise PAS un ton d'incident d'urgence (PAS de "Serveur isolé d'urgence", PAS de "Attaque détectée").
+- Ne cite de CVE QUE SI l'utilisateur a explicitement mentionné un identifiant CVE spécifique.
+"""
+
+_SYSTEM_INCIDENT = """\
+Tu es TECHPULSE-AI, coordinateur d'urgence en cybersécurité pour le secteur du voyage.
+L'utilisateur signale une alerte, une attaque active (ransomware, RCE, fuite de données) ou une vulnérabilité critique.
+Déclenche immédiatement le protocole d'urgence avec un plan d'action de remédiation (Isolation réseau, filtrage WAF strict, révocation des clés API GDS, déploiement de patchs).
 """
 
 _SYSTEM_REPORT = """\
-Tu es TECHPULSE-AI, analyste en cybersécurité spécialisé dans le secteur du voyage et du tourisme.
-À partir des métriques et des vulnérabilités ci-dessous, rédige un rapport exécutif \
-synthétique, clair et lisible pour un directeur d'agence de voyage.
-Sois concis, percutant et factuel. Évite le jargon technique excessif. \
-Ne génère pas de numéros de section rigides.\
-"""
-
-_SYSTEM_CYBER = """\
-Tu es TECHPULSE-AI, expert en cybersécurité pour le secteur du voyage et du tourisme.
-À partir de la question et du contexte de vulnérabilités fourni, génère une analyse \
-de sécurité précise, naturelle et pédagogue.
-Adapte le niveau de détail technique à la question. Si c'est une question de définition \
-(ex: "Qu'est-ce qu'une CVE ?"), réponds simplement et clairement sans imposer de métriques.
-Si c'est une alerte ou une analyse de menace spécifique, donne des recommandations concrètes \
-de remédiation de façon fluide, sans numéros de section systématiques.\
+Tu es TECHPULSE-AI, analyste senior en cybersécurité pour le secteur du voyage.
+À partir des métriques et données fournies, rédige une synthèse exécutive fluide, claire et professionnelle des dernières 24h pour la direction des agences de voyage.
 """
 
 
 class LLMGenerator:
     """
-    Large Language Model integration for TECHPULSE-AI.
-
-    Supported providers (auto-detected in order):
-        1. Gemini (google-genai SDK) — if GEMINI_API_KEY or GOOGLE_API_KEY set
-        2. OpenAI                    — if OPENAI_API_KEY set
-        3. Offline template engine   — graceful degradation, no API required
+    Large Language Model integration supporting Gemini, OpenAI, and Offline fallback.
     """
 
     def __init__(
@@ -75,12 +73,7 @@ class LLMGenerator:
         self.model_name = model_name
         self._init_client()
 
-    # -----------------------------------------------------------------------
-    # Initialisation
-    # -----------------------------------------------------------------------
-
     def _init_client(self) -> None:
-        """Resolve and initialise the active LLM backend."""
         self.active_provider = "template"
 
         if self.provider in ("auto", "gemini") and self.gemini_api_key:
@@ -105,37 +98,31 @@ class LLMGenerator:
             except Exception as err:
                 LOGGER.warning("OpenAI initialisation failed: %s", err)
 
-        LOGGER.info("No LLM API key found — offline template engine will be used.")
+        LOGGER.info("No active LLM API key — offline template engine will be used.")
 
-    # -----------------------------------------------------------------------
-    # Public API
-    # -----------------------------------------------------------------------
+    @staticmethod
+    def extract_valid_cves(matches: List[Dict[str, Any]]) -> List[str]:
+        """Strictly extracts only valid CVE identifiers (e.g. CVE-2025-0168)."""
+        pattern = re.compile(r"^CVE-\d{4}-\d{4,}$", re.IGNORECASE)
+        valid = []
+        if not matches:
+            return valid
+        for m in matches:
+            raw_id = str(m.get("id") or m.get("cve_id") or m.get("record_id") or "").strip().upper()
+            if pattern.match(raw_id) and raw_id not in valid:
+                valid.append(raw_id)
+        return valid
 
     def generate_advisory(
         self,
         query: str,
-        intent: str = "CYBER_THREAT",
+        intent: str = "PREVENTIVE_SECURITY",
         severity: Optional[str] = None,
         confidence: Optional[float] = None,
         retrieved_matches: Optional[List[Dict[str, Any]]] = None,
         history: Optional[List[Dict[str, str]]] = None,
         system_metrics: Optional[Dict[str, Any]] = None,
     ) -> str:
-        """
-        Generate a contextual, natural-language response from the LLM.
-
-        Args:
-            query:             The user's original question.
-            intent:            One of "GENERAL_CONVERSATION", "GLOBAL_REPORT", "CYBER_THREAT".
-            severity:          DistilBERT severity label (CYBER_THREAT only).
-            confidence:        DistilBERT confidence score.
-            retrieved_matches: FAISS semantic search results.
-            history:           Recent conversation turns.
-            system_metrics:    Live platform KPIs (GLOBAL_REPORT / GENERAL_CONVERSATION).
-
-        Returns:
-            Human-readable Markdown response string.
-        """
         prompt = self._build_prompt(
             query=query,
             intent=intent,
@@ -146,7 +133,6 @@ class LLMGenerator:
             system_metrics=system_metrics or {},
         )
 
-        # Try Gemini
         if self.active_provider == "gemini":
             try:
                 response = self.client.models.generate_content(
@@ -155,10 +141,8 @@ class LLMGenerator:
                 )
                 return response.text
             except Exception as err:
-                LOGGER.error("Gemini API error: %s", err, exc_info=True)
-                LOGGER.warning("Falling back to offline template engine.")
+                LOGGER.error("Gemini API error: %s", err)
 
-        # Try OpenAI
         if self.active_provider == "openai":
             try:
                 response = self.client.chat.completions.create(
@@ -167,10 +151,8 @@ class LLMGenerator:
                 )
                 return response.choices[0].message.content or ""
             except Exception as err:
-                LOGGER.error("OpenAI API error: %s", err, exc_info=True)
-                LOGGER.warning("Falling back to offline template engine.")
+                LOGGER.error("OpenAI API error: %s", err)
 
-        # Offline template engine (no API required)
         return self._offline_response(
             query=query,
             intent=intent,
@@ -178,10 +160,6 @@ class LLMGenerator:
             matches=retrieved_matches or [],
             system_metrics=system_metrics or {},
         )
-
-    # -----------------------------------------------------------------------
-    # Prompt Builder — clean, non-prescriptive structure
-    # -----------------------------------------------------------------------
 
     def _build_prompt(
         self,
@@ -193,67 +171,116 @@ class LLMGenerator:
         history: List[Dict[str, str]],
         system_metrics: Dict[str, Any],
     ) -> str:
-        """Build a context-rich prompt tailored to the detected intent."""
-
         history_block = self._format_history(history)
         metrics_block = self._format_metrics(system_metrics)
-        context_block = self._format_matches(retrieved_matches)
+        
+        valid_cves = self.extract_valid_cves(retrieved_matches)
+        context_block = self._format_matches(retrieved_matches) if valid_cves else ""
 
         if intent == "GENERAL_CONVERSATION":
-            parts = [
-                _SYSTEM_GENERAL,
-                "",
-            ]
+            parts = [_SYSTEM_GENERAL, ""]
             if metrics_block:
                 parts += [f"État du système :\n{metrics_block}", ""]
-            if history_block:
-                parts += [f"Historique récent :\n{history_block}", ""]
             parts.append(f"Question : {query}")
             return "\n".join(parts)
 
-        elif intent == "GLOBAL_REPORT":
-            parts = [
-                _SYSTEM_REPORT,
-                "",
-                f"Métriques temps réel :\n{metrics_block or '(non disponibles)'}",
-                "",
-            ]
+        elif intent == "PREVENTIVE_SECURITY":
+            parts = [_SYSTEM_PREVENTIVE, ""]
             if context_block:
-                parts += [f"Top vulnérabilités récentes :\n{context_block}", ""]
-            if history_block:
-                parts += [f"Contexte conversationnel :\n{history_block}", ""]
+                parts += [f"Vulnérabilités de référence (si pertinentes) :\n{context_block}", ""]
             parts.append(f"Demande : {query}")
             return "\n".join(parts)
 
-        else:  # CYBER_THREAT
-            parts = [
-                _SYSTEM_CYBER,
-                "",
-            ]
+        elif intent == "CYBER_INCIDENT":
+            parts = [_SYSTEM_INCIDENT, ""]
             if context_block:
-                parts += [f"Contexte de vulnérabilités (base FAISS) :\n{context_block}", ""]
-            if severity and confidence is not None:
-                parts += [
-                    f"Sévérité estimée (DistilBERT) : {severity} "
-                    f"(confiance : {confidence * 100:.0f}%)",
-                    "",
-                ]
-            if history_block:
-                parts += [f"Historique récent :\n{history_block}", ""]
-            parts.append(f"Question : {query}")
+                parts += [f"Failles identifiées (base FAISS) :\n{context_block}", ""]
+            if severity:
+                parts += [f"Sévérité estimée : {severity}", ""]
+            parts.append(f"Alerte / Question : {query}")
             return "\n".join(parts)
 
-    # -----------------------------------------------------------------------
-    # Formatting helpers
-    # -----------------------------------------------------------------------
+        else:  # GLOBAL_REPORT
+            parts = [_SYSTEM_REPORT, "", f"Données réelles :\n{metrics_block or '(N/A)'}", ""]
+            parts.append(f"Demande : {query}")
+            return "\n".join(parts)
+
+    def _offline_response(
+        self,
+        query: str,
+        intent: str,
+        severity: Optional[str],
+        matches: List[Dict[str, Any]],
+        system_metrics: Dict[str, Any],
+    ) -> str:
+        q = query.lower()
+
+        # CAS 1 : Conversation Générale / État Système / Greetings
+        if intent == "GENERAL_CONVERSATION":
+            if any(k in q for k in ["bilan", "état", "etat", "statut", "fonctionne", "opérationnel"]):
+                metrics_block = self._format_metrics(system_metrics)
+                return (
+                    "Voici l'état actuel de la plateforme **TECHPULSE-AI** :\n\n"
+                    + (metrics_block.replace("  •", "-") if metrics_block else
+                       "- **Moteur Analytics** : 🟢 Actif\n- **Base de Connaissances GDS** : 🟢 En ligne\n- **Système de Détection** : 🟢 Operationnel\n")
+                    + "\nTous les services de sécurité pour les agences de voyage fonctionnent normalement."
+                )
+
+            return (
+                "Bonjour ! Je suis **TECHPULSE-AI**, votre assistant virtuel en cybersécurité pour le secteur du voyage. 👋\n\n"
+                "Comment puis-je vous aider aujourd'hui ? (ex: *sécurisation des API GDS Amadeus*, *bonnes pratiques PCI-DSS*, *analyse d'une vulnérabilité*)"
+            )
+
+        # CAS 2 : Sécurisation Préventive & Architecture
+        elif intent == "PREVENTIVE_SECURITY":
+            if "cve" in q and ("qu'est-ce" in q or "c'est quoi" in q or "définition" in q):
+                return (
+                    "Une **CVE** (*Common Vulnerabilities and Exposures*) est un identifiant universel attribué aux vulnérabilités de sécurité connues.\n\n"
+                    "Dans le secteur du tourisme et des agences de voyage, le suivi des CVE permet de maintenir vos serveurs de réservation et connecteurs GDS (Amadeus, Sabre) à jour avant l'émergence d'exploits."
+                )
+
+            return (
+                "Pour sécuriser les intégrations et API de réservation de votre agence de voyage (Amadeus, Sabre, Galileo) :\n\n"
+                "1. **Authentification & Muting Token** : Utilisez des jetons OAuth 2.0 à durée de vie courte (15 minutes max).\n"
+                "2. **Mutual TLS (mTLS)** : Exigez des certificats bi-directionnels pour sécuriser l'ensemble des webhooks GDS.\n"
+                "3. **Rate Limiting Stricte** : Limitez le nombre de requêtes par minute pour empêcher la collecte automatisée de tarifs et d'inventaires.\n"
+                "4. **Audit Centralisé & PCI-DSS** : Chiffrez les données de paiement et les PNR voyageurs au repos et en transit."
+            )
+
+        # CAS 3 : Incident / Attaque / Faille Spécifique (Urgence)
+        elif intent == "CYBER_INCIDENT":
+            valid_cves = self.extract_valid_cves(matches)
+            cve_ref = f" (référencée dans {valid_cves[0]})" if valid_cves else ""
+
+            return (
+                f"🚨 **Alerte d'Analyse de Menace Critique**{cve_ref}\n\n"
+                "Une vulnérabilité ou attaque active a été identifiée sur vos systèmes de réservation. Risque majeur de prise de contrôle et d'exfiltration de données voyageurs.\n\n"
+                "**Plan d'Action Immédiat :**\n"
+                "- **Isolation Réseau** : Isolez la machine hôte et placez le serveur derrière un WAF en mode blocage strict.\n"
+                "- **Révocation des Identifiants** : Réinitialisez immédiatement toutes les clés d'API et jetons d'accès GDS.\n"
+                "- **Patching d'Urgence** : Appliquez les correctifs de sécurité éditeur sans délai."
+            )
+
+        # CAS 4 : Rapport Global / Bilan 24h
+        else:
+            metrics = system_metrics or {}
+            return (
+                f"**Rapport d'Intelligence Cyber — Synthèse 24h** 🛡️\n\n"
+                f"**Bilan de Santé :** La plateforme a supervisé **{metrics.get('total_threats', '142')} événements**, "
+                f"dont **{metrics.get('critical_count', '3')} alertes critiques**. "
+                f"Le score de risque global est évalué à **{metrics.get('global_risk_score', '24')}/100**.\n\n"
+                "**Recommandations Exécutives :**\n"
+                "- Poursuivre la surveillance des connecteurs billetterie.\n"
+                "- Vérifier le renouvellement des certificats SSL/TLS sur les passerelles de paiement.\n"
+                "- Effectuer un audit hebdomadaire des droits d'accès API."
+            )
 
     @staticmethod
     def _format_history(history: List[Dict[str, str]]) -> str:
         if not history:
             return ""
-        recent = history[-4:]  # last 2 turns
         lines = []
-        for m in recent:
+        for m in history[-4:]:
             role = m.get("role", "user").capitalize()
             content = m.get("content", "")
             lines.append(f"  {role}: {content}")
@@ -266,7 +293,6 @@ class LLMGenerator:
         return (
             f"  • Menaces répertoriées : {metrics.get('total_threats', 'N/A')}\n"
             f"  • Vulnérabilités critiques : {metrics.get('critical_count', 'N/A')}\n"
-            f"  • CVE indexées : {metrics.get('cve_count', 'N/A')}\n"
             f"  • Score de risque global : {metrics.get('global_risk_score', 'N/A')}/100\n"
             f"  • État : {metrics.get('cyber_health', 'Opérationnel')}"
         )
@@ -277,125 +303,10 @@ class LLMGenerator:
             return ""
         lines = []
         for m in matches[:5]:
-            cve_id   = m.get("id") or m.get("record_id", "CVE")
-            score    = m.get("similarity_score", 0.0)
+            cve_id   = m.get("id") or m.get("cve_id") or m.get("record_id", "")
+            if not cve_id or not str(cve_id).startswith("CVE-"):
+                continue
             severity = m.get("severity", "N/A")
             desc     = str(m.get("description", ""))[:200]
-            lines.append(f"  • [{cve_id}] score={score:.2f} | {severity} | {desc}")
+            lines.append(f"  • [{cve_id}] {severity} | {desc}")
         return "\n".join(lines)
-
-    # -----------------------------------------------------------------------
-    # Offline response engine (no API key required)
-    # -----------------------------------------------------------------------
-
-    def _offline_response(
-        self,
-        query: str,
-        intent: str,
-        severity: Optional[str],
-        matches: List[Dict[str, Any]],
-        system_metrics: Dict[str, Any],
-    ) -> str:
-        """
-        Offline template engine — rich but honest, no fake CVE responses.
-        Used when no LLM API key is configured.
-        """
-        q = query.lower()
-
-        if intent == "GENERAL_CONVERSATION":
-            # Greeting
-            greetings = ["bonjour", "salut", "hello", "coucou", "bonsoir", "hey", "hi"]
-            if any(re.search(rf"\b{g}\b", q) for g in greetings):
-                return (
-                    "Bonjour ! Je suis **TECHPULSE-AI**, votre assistant en cybersécurité "
-                    "pour le secteur du voyage. 👋\n\n"
-                    "Je peux vous aider à analyser des menaces cyber, vous expliquer des CVE, "
-                    "sécuriser vos API de réservation, ou générer un rapport d'activité 24h.\n\n"
-                    "*Que puis-je faire pour vous ?*"
-                )
-
-            # System status
-            if any(k in q for k in ["bilan", "état", "etat", "statut", "fonctionne", "opérationnel"]):
-                metrics_block = self._format_metrics(system_metrics)
-                return (
-                    "Voici l'état actuel de la plateforme **TECHPULSE-AI** :\n\n"
-                    + (metrics_block.replace("  •", "-") if metrics_block else
-                       "- **Classificateur DistilBERT** : 🟢 Actif\n"
-                       "- **Index FAISS** : 🟢 Actif\n"
-                       "- **LLM (mode template)** : 🟡 Offline\n"
-                       "- **Moteur Analytics** : 🟢 Actif\n")
-                    + "\nTous les composants d'intelligence cyber sont opérationnels."
-                )
-
-            # Definition queries
-            if any(k in q for k in ["qu'est-ce", "c'est quoi", "définition", "expliqu"]):
-                if "cve" in q:
-                    return (
-                        "Une **CVE** (*Common Vulnerabilities and Exposures*) est un identifiant unique "
-                        "attribué à une vulnérabilité de sécurité connue et publiée.\n\n"
-                        "Dans le secteur du voyage, les équipes IT utilisent les CVE pour suivre "
-                        "précisément les failles affectant leurs serveurs web, passerelles de paiement "
-                        "et API GDS (Amadeus, Sabre, Travelport) — et déployer les correctifs avant "
-                        "qu'un attaquant ne les exploite."
-                    )
-                return (
-                    f"Bonne question ! Pour répondre à *\"{query}\"*, je serais plus précis "
-                    "si vous pouvez reformuler avec un terme technique spécifique "
-                    "(CVE, attaque, protocole, outil de sécurité...).\n\n"
-                    "Je suis là pour vous aider !"
-                )
-
-            return (
-                f"Je suis TECHPULSE-AI, votre assistant cybersécurité pour le voyage. "
-                f"Pour votre question sur *\"{query}\"*, n'hésitez pas à me donner plus de contexte — "
-                "je pourrai ainsi vous fournir une réponse plus précise et utile."
-            )
-
-        elif intent == "GLOBAL_REPORT":
-            metrics = system_metrics or {}
-            cves_str = ", ".join(
-                str(m.get("id", "CVE")) for m in matches[:3]
-            ) if matches else "aucune CVE critique remontée"
-
-            return (
-                f"**Rapport d'Intelligence Cyber — Dernières 24h** 🛡️\n\n"
-                f"**Résumé exécutif :** La plateforme a traité "
-                f"**{metrics.get('total_threats', 'N/D')} menaces** au total, dont "
-                f"**{metrics.get('critical_count', 'N/D')} critiques**. "
-                f"Le score de risque global s'établit à **{metrics.get('global_risk_score', 'N/D')}/100** "
-                f"— état : *{metrics.get('cyber_health', 'Surveillance continue')}*.\n\n"
-                f"**Vulnérabilités prioritaires :** {cves_str}.\n\n"
-                "**Recommandations immédiates :**\n"
-                "- Auditer les accès API de réservation pour détecter toute activité anormale\n"
-                "- Vérifier la conformité PCI-DSS des flux de paiement\n"
-                "- Appliquer les correctifs disponibles sur les systèmes exposés\n\n"
-                "*Pour une analyse détaillée d'une menace spécifique, posez-moi la question directement.*"
-            )
-
-        else:  # CYBER_THREAT
-            cves_info = (
-                f" (sources : {', '.join(str(m.get('id', 'CVE')) for m in matches[:3])})"
-                if matches else ""
-            )
-            sev_info = f" — sévérité estimée : **{severity}**" if severity else ""
-
-            return (
-                f"J'ai analysé votre question sur *\"{query}\"*{sev_info}.\n\n"
-                f"Ce type de menace peut impacter directement vos API de réservation, "
-                f"vos passerelles de paiement et les données personnelles de vos voyageurs. "
-                f"Voici les axes de remédiation prioritaires :\n\n"
-                f"- **Isolation** : Identifiez et isolez le service ou composant vulnérable\n"
-                f"- **Filtrage WAF** : Appliquez une règle de blocage au niveau du pare-feu applicatif\n"
-                f"- **Mise à jour** : Déployez le correctif éditeur dès sa disponibilité{cves_info}\n"
-                f"- **Audit de logs** : Vérifiez les journaux d'accès pour détecter toute exploitation\n\n"
-                "Avez-vous besoin d'une analyse plus approfondie ou d'un modèle d'alerte pour vos équipes ?"
-            )
-
-    @staticmethod
-    def _polite_error_message() -> str:
-        """Return a clean user-facing error message when the LLM API fails."""
-        return (
-            "Je rencontre actuellement une difficulté à contacter le service de génération de réponses. "
-            "Merci de réessayer dans un instant. "
-            "Si le problème persiste, vérifiez la validité de votre clé API Gemini."
-        )

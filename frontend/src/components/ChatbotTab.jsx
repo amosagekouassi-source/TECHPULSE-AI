@@ -29,86 +29,58 @@ export default function ChatbotTab({ t, lang }) {
     scrollToBottom();
   }, [messages, isProcessing]);
 
-  // Handle prompt sending
-  const handleSend = (textToSend) => {
-    const query = textToSend || inputValue;
-    if (!query.trim() || isProcessing) return;
+  const handleSend = async (text) => {
+    const query = text || inputValue;
+    if (!query.trim()) return;
 
-    const userMessage = {
-      id: Date.now(),
-      role: 'user',
-      content: query,
-    };
+    const userMsg = { id: Date.now(), role: 'user', content: query };
+    setMessages(prev => [...prev, userMsg]);
+    if (!text) setInputValue('');
 
-    setMessages((prev) => [...prev, userMessage]);
-    if (!textToSend) setInputValue('');
-    setIsProcessing(true);
+    // Message temporaire pendant le traitement RAG
+    const loadingId = Date.now() + 1;
+    setMessages(prev => [...prev, { 
+      id: loadingId, 
+      role: 'assistant', 
+      content: t.assistant.processing, 
+      loading: true 
+    }]);
 
-    // Simulate RAG Pipeline process & response synthesis
-    setTimeout(() => {
-      let intent = 'GENERAL_QUESTION';
-      let severity = null;
-      let cves = [];
-      let modules = { faiss: true, distilbert: false, llm: true };
-      let answerText = '';
+    try {
+      // Connexion à votre API FastAPI / Python (ex: http://localhost:8000/api/chat)
+      const response = await fetch('http://localhost:8000/api/chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ message: query, lang: lang })
+      });
 
-      const queryLower = query.toLowerCase();
+      const data = await response.json();
 
-      const greetings = ['bonjour', 'salut', 'hello', 'hi', 'coucou', 'bonsoir', 'hey'];
-      const isGreeting = greetings.some(g => queryLower.includes(g));
-
-      if (isGreeting && !queryLower.includes('cve') && !queryLower.includes('rce')) {
-        intent = 'GENERAL_QUESTION';
-        cves = [];
-        modules = { faiss: false, distilbert: false, llm: true };
-        answerText = lang === 'fr'
-          ? "Bonjour ! Je suis **TECHPULSE-AI**, votre assistant virtuel en cybersécurité pour le secteur du voyage.\n\nComment puis-je vous aider aujourd'hui ? (ex: *sécurisation des API GDS Amadeus*, *analyse d'alerte*, *bonnes pratiques PCI-DSS*)"
-          : "Hello! I am **TECHPULSE-AI**, your virtual cybersecurity assistant for the travel industry.\n\nHow can I assist you today? (e.g., *securing Amadeus GDS APIs*, *threat analysis*, *PCI-DSS best practices*)";
-      } else if (queryLower.includes('cve') || queryLower.includes('qu\'est-ce') || queryLower.includes('what is')) {
-        intent = 'GENERAL_QUESTION';
-        cves = [];
-        modules = { faiss: false, distilbert: false, llm: true };
-        answerText = lang === 'fr'
-          ? "Une **CVE** (*Common Vulnerabilities and Exposures*) est un identifiant universel attribué aux vulnérabilités connues.\n\nDans le secteur du voyage, les CVE vous permettent d'identifier si vos serveurs de réservation, API GDS ou passerelles de paiement présentent des failles identifiées par la communauté mondiale de cybersécurité."
-          : "A **CVE** (*Common Vulnerabilities and Exposures*) is a standardized identifier assigned to publicly disclosed cybersecurity vulnerabilities.\n\nIn the travel industry, tracking CVEs helps IT teams ensure booking engines, GDS connectors, and payment gateways are patched before exploit vectors emerge.";
-      } else if (queryLower.includes('amadeus') || queryLower.includes('gds') || queryLower.includes('sécuriser') || queryLower.includes('secure')) {
-        intent = 'CYBER_QUESTION';
-        cves = ['CVE-2025-0168'];
-        modules.distilbert = true;
-        severity = 'HIGH';
-        answerText = lang === 'fr'
-          ? "Pour sécuriser les intégrations **GDS Amadeus & Sabre** de votre agence de voyage :\n\n1. **Authentification & Muting Token** : Mettez en place des jetons OAuth 2.0 à durée de vie courte (15 min).\n2. **Mutual TLS (mTLS)** : Exigez des certificats bi-directionnels pour toute requête de réservation.\n3. **Rate Limiting Stricte** : Limitez le volume de requêtes par minute pour prévenir l'aspiration massive de tarifs ou d'inventaires de vols.\n4. **Audit Log Centralisé** : Surveillez les anomalies sur l'API billetterie."
-          : "To secure your travel agency's **Amadeus & Sabre GDS** integrations:\n\n1. **Authentication & Token Expiry**: Implement OAuth 2.0 tokens with short TTLs (15 min).\n2. **Mutual TLS (mTLS)**: Enforce bi-directional certificates for booking webhooks.\n3. **Strict Rate Limiting**: Limit API requests per minute to prevent tariff scraping.\n4. **Centralized Audit Logging**: Monitor anomalies on ticket issuance APIs.";
-      } else if (queryLower.includes('rce') || queryLower.includes('critique') || queryLower.includes('vulnerability') || queryLower.includes('serveur')) {
-        intent = 'THREAT_ANALYSIS';
-        cves = ['CVE-2025-1429', 'CVE-2026-0041'];
-        modules.distilbert = true;
-        severity = 'CRITICAL';
-        answerText = lang === 'fr'
-          ? "🚨 **Alerte d'Analyse de Menace RCE Détectée**\n\nUne vulnérabilité d'exécution de code à distance (RCE) sur un serveur de réservation présente un risque direct de prise de contrôle du système et d'exfiltration des données voyageurs (PNR, passeports).\n\n**Plan d'Action Immédiat :**\n- **Isolation Réseau** : Placez le serveur impacté derrière un WAF strict en mode blocage.\n- **Révocation des Identifiants** : Réinitialisez immédiatement les API Keys connectées au GDS.\n- **Atténuation RAG** : Consulter la directive de sécurité référencée dans la CVE-2025-1429."
-          : "🚨 **RCE Threat Analysis Alert Detected**\n\nA Remote Code Execution (RCE) flaw on a booking server poses a severe threat of system compromise and passenger record (PNR) leakage.\n\n**Immediate Action Plan:**\n- **Network Isolation**: Place the affected host behind a WAF in strict blocking mode.\n- **Credential Revocation**: Immediately rotate API keys connected to GDS systems.\n- **Patching**: Apply emergency security updates as specified in CVE-2025-1429.";
-      } else {
-        intent = 'CYBER_QUESTION';
-        cves = [];
-        modules = { faiss: true, distilbert: false, llm: true };
-        answerText = lang === 'fr'
-          ? `J'ai bien reçu votre demande concernant *"${query}"*.\n\nDans le secteur du tourisme et des agences de voyage, il est essentiel de protéger les données sensibles des voyageurs (passeports, coordonnées bancaires) et de surveiller l'intégrité des webhooks de réservation.`
-          : `I have received your request regarding *"${query}"*.\n\nIn the tourism and travel agency sector, securing passenger data and monitoring booking webhook endpoints is essential.`;
-      }
-
-      const botMessage = {
-        id: Date.now() + 1,
-        role: 'assistant',
-        content: answerText,
-        intent,
-        severity,
-        cves,
-        modules,
-      };
-
-      setMessages((prev) => [...prev, botMessage]);
-      setIsProcessing(false);
-    }, 1000);
+      // Remplacement du message de chargement par la vraie réponse du RAG
+      setMessages(prev => prev.map(msg => 
+        msg.id === loadingId 
+          ? { 
+              id: loadingId, 
+              role: 'assistant', 
+              content: data.response, 
+              intent: data.intent, 
+              cves: data.cves || [] 
+            }
+          : msg
+      ));
+    } catch (error) {
+      // Gestion propre en cas de déconnexion du backend
+      setMessages(prev => prev.map(msg => 
+        msg.id === loadingId 
+          ? { 
+              id: loadingId, 
+              role: 'assistant', 
+              content: "⚠️ Connexion au serveur RAG interrompue. Veuillez vérifier le backend Python.", 
+              intent: "ERROR" 
+            }
+          : msg
+      ));
+    }
   };
 
   return (
@@ -193,20 +165,23 @@ export default function ChatbotTab({ t, lang }) {
                   )}
 
                   {/* CVE Sources Citation Tags */}
-                  {msg.cves && msg.cves.length > 0 && (
-                    <div className="flex items-center space-x-1">
-                      <span className="text-slate-400">{t.assistant.cveSourcesLabel}</span>
-                      {msg.cves.map((cve) => (
-                        <span
-                          key={cve}
-                          className="px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-700/50 font-mono font-bold flex items-center space-x-1 cursor-pointer hover:bg-cyan-900 transition"
-                        >
-                          <span>{cve}</span>
-                          <ExternalLink className="w-3 h-3" />
-                        </span>
-                      ))}
-                    </div>
-                  )}
+                  {(() => {
+                    const validCves = (msg.cves || []).filter(c => /^CVE-\d{4}-\d+/i.test(c));
+                    return validCves.length > 0 ? (
+                      <div className="flex items-center space-x-1">
+                        <span className="text-slate-400">{t.assistant.cveSourcesLabel}</span>
+                        {validCves.map((cve) => (
+                          <span
+                            key={cve}
+                            className="px-2 py-0.5 rounded bg-cyan-950 text-cyan-400 border border-cyan-700/50 font-mono font-bold flex items-center space-x-1 cursor-pointer hover:bg-cyan-900 transition"
+                          >
+                            <span>{cve}</span>
+                            <ExternalLink className="w-3 h-3" />
+                          </span>
+                        ))}
+                      </div>
+                    ) : null;
+                  })()}
                 </div>
               )}
             </div>

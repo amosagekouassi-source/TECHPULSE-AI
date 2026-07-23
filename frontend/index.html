@@ -414,35 +414,50 @@
           if (!text) setInputValue('');
 
           setTimeout(() => {
-            const queryLower = query.toLowerCase();
-            const greetings = ['bonjour', 'salut', 'hello', 'hi', 'coucou', 'bonsoir', 'hey'];
-            const isGreeting = greetings.some(g => queryLower.includes(g));
-
+            const q = query.toLowerCase();
             let answer = '';
             let cves = [];
             let intent = 'GENERAL_QUESTION';
 
-            if (isGreeting && !queryLower.includes('cve') && !queryLower.includes('rce')) {
+            // 1. Détection des SALUTATIONS PURES (ex: "bonjour", "salut", "coucou")
+            const pureGreetings = ['bonjour', 'salut', 'hello', 'coucou', 'bonsoir', 'hey'];
+            const isPureGreeting = pureGreetings.some(g => q.trim() === g || q.trim() === g + '!');
+
+            // 2. Détection des DEMANDES DE RAPPORT / BILAN
+            const isReportReq = q.includes('rapport') || q.includes('bilan') || q.includes('dernières') || q.includes('heures') || q.includes('24h');
+
+            // 3. Détection des QUESTIONS SUR LES CVE
+            const isCveReq = q.includes('cve') || q.includes("qu'est-ce") || q.includes('what is');
+
+            if (isPureGreeting) {
               intent = 'GENERAL_QUESTION';
               answer = lang === 'fr' 
-                ? "Bonjour ! Je suis **TECHPULSE-AI**, votre assistant virtuel en cybersécurité pour le secteur du voyage. Comment puis-je vous aider aujourd'hui ?"
-                : "Hello! I am **TECHPULSE-AI**, your virtual cybersecurity assistant for the travel industry. How can I assist you today?";
-            } else if (queryLower.includes('cve') || queryLower.includes('qu\'est-ce') || queryLower.includes('what is')) {
+                ? "Bonjour ! 👋 Comment puis-je vous aider aujourd'hui ? Vous pouvez me demander un bilan récent, une analyse de vulnérabilité ou des conseils de sécurisation API."
+                : "Hello! 👋 How can I assist you today? You can ask me for a recent summary, vulnerability analysis, or API security advice.";
+            } 
+            else if (isReportReq) {
+              intent = 'REPORT_REQUEST';
+              answer = lang === 'fr'
+                ? "📊 **Bilan d'activité des 2 dernières heures :**\n\n- **Alertes analysées :** 14 événements réseau et API enregistrés.\n- **Statut des API GDS :** Amadeus et Sabre fonctionnent normalement sans anomalie critique.\n- **Sévérité globale :** Faible (0 menace critique détectée).\n- **Passerelles de paiement :** Flux PCI-DSS 100% sécurisés.\n\nTous les systèmes de réservation de l'agence restent pleinement opérationnels."
+                : "📊 **2-Hour Activity Report:**\n\n- **Analyzed Alerts:** 14 network and API events recorded.\n- **GDS API Status:** Amadeus and Sabre operate normally with no critical anomalies.\n- **Overall Severity:** Low (0 critical threats detected).\n- **Payment Gateways:** PCI-DSS flows 100% secure.";
+            }
+            else if (isCveReq) {
               intent = 'GENERAL_QUESTION';
               cves = ['CVE-2025-0168'];
               answer = lang === 'fr' 
                 ? "Une **CVE** (*Common Vulnerabilities and Exposures*) est un identifiant universel attribué aux vulnérabilités connues. Dans le secteur du voyage, les CVE permettent de suivre et corriger rapidement les failles sur les serveurs de réservation et API GDS."
                 : "A **CVE** (*Common Vulnerabilities and Exposures*) is a standardized identifier assigned to publicly disclosed vulnerabilities to ensure travel GDS endpoints remain secure.";
-            } else {
+            } 
+            else {
               intent = 'CYBER_QUESTION';
               answer = lang === 'fr'
-                ? `J'ai bien analysé votre demande concernant *"${query}"*.\n\nDans le secteur du tourisme, la protection des flux de réservation et la sécurisation des accès API (Amadeus, Sabre) sont indispensables pour prévenir la fraude.`
-                : `I have analyzed your request regarding *"${query}"*.\n\nIn the travel industry, protecting booking flows and securing API endpoints (Amadeus, Sabre) is crucial to prevent fraud.`;
+                ? `J'ai bien pris en compte votre demande concernant : *"${query}"*.\n\nPour la sécurisation de vos accès et connecteurs du secteur voyage, nos analyses préconisent l'application de filtres WAF stricts, le chiffrement mTLS sur vos endpoints API et le suivi régulier des logs de réservation.`
+                : `I have processed your request regarding: *"${query}"*.\n\nTo secure your travel industry connectors, our system recommends enforcing strict WAF rules, mTLS encryption on API endpoints, and continuous audit of booking logs.`;
             }
 
             const botMsg = { id: Date.now() + 1, role: 'assistant', content: answer, intent, cves };
             setMessages(prev => [...prev, botMsg]);
-          }, 600);
+          }, 500);
         };
 
         return (
@@ -455,7 +470,7 @@
             <div className="flex-1 p-6 overflow-y-auto space-y-4">
               {messages.map(m => (
                 <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-                  <div className={`max-w-xl p-4 rounded-2xl text-sm ${m.role === 'user' ? 'bg-cyan-600 text-white' : 'bg-slate-900 border border-slate-800 text-slate-200'}`}>
+                  <div className={`max-w-xl p-4 rounded-2xl text-sm whitespace-pre-line ${m.role === 'user' ? 'bg-cyan-600 text-white' : 'bg-slate-900 border border-slate-800 text-slate-200'}`}>
                     {m.content}
                     {m.cves && m.cves.length > 0 && (
                       <div className="mt-2 text-xs text-cyan-400 font-mono">Sources : {m.cves.join(', ')}</div>
