@@ -16,11 +16,18 @@ export default function App() {
 
   const t = translations[lang] || translations.fr;
 
+  const [initialChatQuery, setInitialChatQuery] = useState('');
+
   const notify = (msg) => {
     setToastMessage(msg);
     setTimeout(() => {
       setToastMessage(null);
     }, 3000);
+  };
+
+  const handleAskAssistant = (query) => {
+    setInitialChatQuery(query);
+    setActiveTab('assistant');
   };
 
   return (
@@ -49,8 +56,22 @@ export default function App() {
 
         {/* Main Content Workspace Area */}
         <main className="flex-1 min-w-0">
-          {activeTab === 'dashboard' && <DashboardTab t={t} notify={notify} />}
-          {activeTab === 'assistant' && <ChatbotTab t={t} lang={lang} />}
+          {activeTab === 'dashboard' && (
+            <DashboardTab 
+              t={t} 
+              notify={notify} 
+              agency={agency}
+              onAskAssistant={handleAskAssistant}
+            />
+          )}
+          {activeTab === 'assistant' && (
+            <ChatbotTab 
+              t={t} 
+              lang={lang} 
+              initialQuery={initialChatQuery}
+              clearInitialQuery={() => setInitialChatQuery('')}
+            />
+          )}
           {activeTab === 'gdsSecurity' && <GdsSecurityTab t={t} notify={notify} />}
           {activeTab === 'settings' && <SettingsTab t={t} notify={notify} />}
         </main>

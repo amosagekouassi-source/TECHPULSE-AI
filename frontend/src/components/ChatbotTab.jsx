@@ -5,7 +5,7 @@ import {
   RefreshCw, CheckCircle2, AlertTriangle
 } from 'lucide-react';
 
-export default function ChatbotTab({ t, lang }) {
+export default function ChatbotTab({ t, lang, initialQuery, clearInitialQuery }) {
   const [messages, setMessages] = useState([
     {
       id: 1,
@@ -28,6 +28,14 @@ export default function ChatbotTab({ t, lang }) {
   useEffect(() => {
     scrollToBottom();
   }, [messages, isProcessing]);
+
+  useEffect(() => {
+    if (initialQuery && initialQuery.trim()) {
+      const queryToRun = initialQuery;
+      if (clearInitialQuery) clearInitialQuery();
+      handleSend(queryToRun);
+    }
+  }, [initialQuery]);
 
   const handleSend = async (text) => {
     const query = text || inputValue;
