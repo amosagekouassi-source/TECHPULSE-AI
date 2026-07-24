@@ -417,136 +417,223 @@
         );
       }
 
+      // ── Parseur Markdown léger (pas de dépendance externe) ──
+      function renderMarkdown(text) {
+        if (!text) return null;
+        const lines = text.split('\n');
+        const elements = [];
+        let i = 0;
+        while (i < lines.length) {
+          const line = lines[i];
+          // Titre H1
+          if (line.startsWith('# ')) {
+            elements.push(<h1 key={i} className="text-lg font-black text-white mt-3 mb-1">{line.slice(2)}</h1>);
+          }
+          // Titre H2
+          else if (line.startsWith('## ')) {
+            elements.push(<h2 key={i} className="text-base font-bold text-cyan-300 mt-3 mb-1 border-b border-slate-700 pb-1">{line.slice(3)}</h2>);
+          }
+          // Titre H3
+          else if (line.startsWith('### ')) {
+            elements.push(<h3 key={i} className="text-sm font-bold text-emerald-400 mt-2 mb-0.5">{line.slice(4)}</h3>);
+          }
+          // Ligne de séparation ---
+          else if (/^---+$/.test(line.trim())) {
+            elements.push(<hr key={i} className="border-slate-700 my-2" />);
+          }
+          // Item de liste * ou -
+          else if (/^[*\-]\s+/.test(line)) {
+            elements.push(
+              <div key={i} className="flex items-start space-x-2 my-0.5">
+                <span className="text-cyan-400 mt-0.5 shrink-0">▸</span>
+                <span dangerouslySetInnerHTML={{ __html: inlineFormat(line.replace(/^[*\-]\s+/, '')) }} />
+              </div>
+            );
+          }
+          // Item numéroté 1. 2.
+          else if (/^\d+\.\s+/.test(line)) {
+            const num = line.match(/^(\d+)\.\s+/)[1];
+            elements.push(
+              <div key={i} className="flex items-start space-x-2 my-0.5">
+                <span className="text-cyan-400 font-bold shrink-0 w-5 text-right">{num}.</span>
+                <span dangerouslySetInnerHTML={{ __html: inlineFormat(line.replace(/^\d+\.\s+/, '')) }} />
+              </div>
+            );
+          }
+          // Code block ```
+          else if (line.startsWith('```')) {
+            const codeLines = [];
+            i++;
+            while (i < lines.length && !lines[i].startsWith('```')) {
+              codeLines.push(lines[i]);
+              i++;
+            }
+            elements.push(
+              <pre key={i} className="bg-slate-950 border border-slate-700 rounded-lg p-3 my-2 text-xs text-emerald-300 font-mono overflow-x-auto whitespace-pre-wrap">
+                {codeLines.join('\n')}
+              </pre>
+            );
+          }
+          // Ligne vide
+          else if (line.trim() === '') {
+            elements.push(<div key={i} className="h-1" />);
+          }
+          // Paragraphe normal
+          else {
+            elements.push(<p key={i} className="my-0.5 leading-relaxed" dangerouslySetInnerHTML={{ __html: inlineFormat(line) }} />);
+          }
+          i++;
+        }
+        return <div className="space-y-0.5">{elements}</div>;
+      }
+
+      function inlineFormat(text) {
+        return text
+          .replace(/\*\*([^*]+)\*\*/g, '<strong class="text-white font-bold">$1</strong>')
+          .replace(/\*([^*]+)\*/g, '<em class="text-slate-300 italic">$1</em>')
+          .replace(/`([^`]+)`/g, '<code class="bg-slate-800 text-emerald-300 font-mono px-1 py-0.5 rounded text-xs">$1</code>')
+          .replace(/CVE-\d{4}-\d+/g, (m) => `<span class="font-mono font-bold text-rose-400 bg-rose-500/10 px-1 rounded">${m}</span>`)
+          .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank" class="text-cyan-400 underline hover:text-cyan-300">$1</a>');
+      }
+
 function ChatbotTab({ t, lang }) {
+  const API_BASE = 'https://techpulse-ai-sm13.onrender.com';
+  const bottomRef = useRef(null);
   const [messages, setMessages] = useState([
     { id: 1, role: 'assistant', content: t.assistant.initialGreeting, cves: [] }
   ]);
   const [inputValue, setInputValue] = useState('');
   const [loading, setLoading] = useState(false);
-  const [dbStatus, setDbStatus] = useState('');
 
-  // 1. Charger l'historique SQLite au démarrage du composant
-  useEffect(() => {
-    async function loadHistory() {
-      try {
-        const res = await fetch('http://localhost:8000/api/history');
-        if (res.ok) {
-          const data = await res.json();
-          if (data.messages && data.messages.length > 0) {
-            setMessages(data.messages);
-            setDbStatus('Historique SQLite chargé');
-          }
-        }
-      } catch (e) {
-        console.log('Mode offline ou serveur non démarré');
-      }
-    }
-    loadHistory();
-  }, []);
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: 'smooth' }); }, [messages, loading]);
 
   const handleSend = async (text) => {
-    const query = text || inputValue;
-    if (!query.trim() || loading) return;
-
-    // 1. Ajouter le message utilisateur
-    const userMsg = { id: Date.now(), role: 'user', content: query };
-    setMessages(prev => [...prev, userMsg]);
+    const query = (text || inputValue).trim();
+    if (!query || loading) return;
+    setMessages(prev => [...prev, { id: Date.now(), role: 'user', content: query }]);
     if (!text) setInputValue('');
     setLoading(true);
-
     try {
-      // 2. Appel direct à l'API Backend Python (FastAPI)
-      const res = await fetch('http://localhost:8000/api/chat', {
+      const res = await fetch(`${API_BASE}/api/chat`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: query, lang: lang })
+        body: JSON.stringify({ message: query, lang })
       });
-      
       const data = await res.json();
-
-      // 3. Ajouter la réponse naturelle générée par Gemini
-      const botMsg = { 
-        id: Date.now() + 1, 
-        role: 'assistant', 
-        content: data.response, 
-        cves: data.cves || [] 
-      };
-      setMessages(prev => [...prev, botMsg]);
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1, role: 'assistant',
+        content: data.response,
+        intent: data.intent,
+        cves: data.cves || []
+      }]);
     } catch (err) {
-      setMessages(prev => [...prev, { 
-        id: Date.now() + 1, 
-        role: 'assistant', 
-        content: "⚠️ Erreur de connexion avec le serveur Python (FastAPI). Assurez-vous que le backend est lancé sur http://localhost:8000." 
+      setMessages(prev => [...prev, {
+        id: Date.now() + 1, role: 'assistant',
+        content: "⚠️ **Connexion au backend interrompue.**\n\nLe serveur FastAPI (Render) est peut-être en cours de démarrage (cold start ~30s). Réessayez dans quelques instants."
       }]);
     } finally {
       setLoading(false);
     }
   };
 
-  const handleClearHistory = async () => {
-    try {
-      await fetch('http://localhost:8000/api/history', { method: 'DELETE' });
-    } catch (e) {}
-    setMessages([{ id: Date.now(), role: 'assistant', content: t.assistant.initialGreeting, cves: [] }]);
-    setDbStatus('Historique SQLite effacé');
-  };
+  const handleClear = () => setMessages([{ id: Date.now(), role: 'assistant', content: t.assistant.initialGreeting, cves: [] }]);
 
   return (
-    <div className="glass-panel rounded-2xl border border-slate-800 flex flex-col h-[600px] overflow-hidden">
-      <div className="px-6 py-4 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between">
+    <div className="glass-panel rounded-2xl border border-slate-800 flex flex-col h-[calc(100vh-180px)] min-h-[560px] overflow-hidden">
+      {/* Header */}
+      <div className="px-6 py-4 bg-slate-900/90 border-b border-slate-800 flex items-center justify-between shrink-0">
         <div className="flex items-center space-x-3">
-          <h3 className="font-bold text-white">{t.assistant.title}</h3>
-          <span className="text-xs text-emerald-400 font-bold bg-emerald-500/10 px-2.5 py-1 rounded-full border border-emerald-500/30">
-            Gemini Live + SQLite BDD
-          </span>
+          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-cyan-500 to-emerald-500 flex items-center justify-center text-lg shadow-md">🤖</div>
+          <div>
+            <h3 className="font-bold text-white text-sm flex items-center space-x-2">
+              <span>{t.assistant.title}</span>
+              <span className="text-[10px] text-emerald-400 font-extrabold bg-emerald-500/10 px-2 py-0.5 rounded-full border border-emerald-500/30">RAG ACTIVE</span>
+            </h3>
+            <p className="text-[11px] text-slate-400">{t.assistant.subtitle}</p>
+          </div>
         </div>
-        <button
-          onClick={handleClearHistory}
-          className="px-3 py-1 rounded-lg bg-slate-800 hover:bg-rose-950 hover:text-rose-400 text-xs text-slate-400 transition border border-slate-700"
-          title="Effacer la base de données SQLite"
-        >
-          🗑️ Vider l'historique
-        </button>
+        <div className="flex items-center space-x-2">
+          <div className="flex items-center space-x-1.5 text-[10px] text-emerald-400 font-bold">
+            <span className="h-2 w-2 rounded-full bg-emerald-400 animate-pulse"></span>
+            <span>FAISS • DistilBERT • Gemini</span>
+          </div>
+          <button onClick={handleClear} className="ml-3 p-2 rounded-lg bg-slate-800 hover:bg-rose-950 hover:text-rose-400 text-slate-400 text-xs transition border border-slate-700" title="Nouvelle conversation">🗑️</button>
+        </div>
       </div>
 
-      <div className="flex-1 p-6 overflow-y-auto space-y-4">
+      {/* Messages */}
+      <div className="flex-1 overflow-y-auto p-6 space-y-5">
         {messages.map(m => (
-          <div key={m.id} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-xl p-4 rounded-2xl text-sm whitespace-pre-line ${m.role === 'user' ? 'bg-cyan-600 text-white' : 'bg-slate-900 border border-slate-800 text-slate-200'}`}>
-              {m.content}
-              {m.cves && m.cves.length > 0 && (
-                <div className="mt-2 text-xs text-cyan-400 font-mono">Sources : {m.cves.join(', ')}</div>
+          <div key={m.id} className={`flex items-start space-x-3 ${ m.role === 'user' ? 'flex-row-reverse space-x-reverse' : ''}`}>
+            <div className={`w-9 h-9 rounded-xl shrink-0 flex items-center justify-center text-base shadow ${ m.role === 'user' ? 'bg-gradient-to-tr from-cyan-600 to-cyan-500' : 'bg-slate-800 border border-slate-700'}`}>
+              {m.role === 'user' ? '👤' : '🤖'}
+            </div>
+            <div className={`max-w-2xl space-y-1.5 ${ m.role === 'user' ? 'items-end' : 'items-start'} flex flex-col`}>
+              <div className={`p-4 rounded-2xl text-sm leading-relaxed ${
+                m.role === 'user'
+                  ? 'bg-cyan-600 text-white font-medium rounded-tr-none'
+                  : 'bg-slate-900/90 border border-slate-800 text-slate-200 rounded-tl-none'
+              }`}>
+                {m.role === 'assistant' ? renderMarkdown(m.content) : m.content}
+              </div>
+              {/* Badges metadata */}
+              {m.role === 'assistant' && m.intent && m.intent !== 'GENERAL_QUESTION' && (
+                <div className="flex flex-wrap gap-1.5 px-1">
+                  <span className="text-[10px] px-2 py-0.5 rounded-md bg-slate-800 text-cyan-400 border border-slate-700 font-semibold">
+                    🎯 {t.assistant.intentLabel} {m.intent}
+                  </span>
+                  {m.cves && m.cves.filter(c => /^CVE-/i.test(c)).map(cve => (
+                    <a key={cve} href={`https://nvd.nist.gov/vuln/detail/${cve}`} target="_blank"
+                      className="text-[10px] px-2 py-0.5 rounded-md bg-rose-500/10 text-rose-400 border border-rose-500/30 font-mono font-bold hover:bg-rose-500/20 transition">
+                      🔗 {cve}
+                    </a>
+                  ))}
+                </div>
               )}
             </div>
           </div>
         ))}
+
+        {/* Typing indicator */}
         {loading && (
-          <div className="flex justify-start">
-            <div className="p-4 rounded-2xl bg-slate-900 border border-slate-800 text-slate-400 text-sm animate-pulse">
-              ⚡ TECHPULSE-AI sauvegarde dans SQLite & réfléchit...
+          <div className="flex items-start space-x-3">
+            <div className="w-9 h-9 rounded-xl bg-slate-800 border border-slate-700 flex items-center justify-center text-base animate-pulse">🤖</div>
+            <div className="p-4 rounded-2xl bg-slate-900/90 border border-slate-800 rounded-tl-none flex items-center space-x-3">
+              <div className="flex space-x-1">
+                <span className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce" style={{animationDelay:'0ms'}}></span>
+                <span className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce" style={{animationDelay:'150ms'}}></span>
+                <span className="w-2 h-2 bg-cyan-400 rounded-full animate-bounce" style={{animationDelay:'300ms'}}></span>
+              </div>
+              <span className="text-xs text-cyan-400 font-medium">{t.assistant.processing}</span>
             </div>
           </div>
         )}
+        <div ref={bottomRef} />
       </div>
 
-      <div className="p-3 bg-slate-950 border-t border-slate-800/80 flex flex-wrap gap-2">
-        {t.assistant.promptChips.map((chip, i) => (
-          <button key={i} onClick={() => handleSend(chip)} className="px-3 py-1 rounded-xl bg-slate-900 border border-slate-800 text-xs text-slate-300 hover:text-cyan-400 transition">
-            {chip}
-          </button>
-        ))}
+      {/* Prompt chips */}
+      <div className="px-6 py-3 border-t border-slate-800/80 bg-slate-950/60 shrink-0">
+        <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2">{t.assistant.promptChipsTitle}</p>
+        <div className="flex flex-wrap gap-2">
+          {t.assistant.promptChips.map((chip, i) => (
+            <button key={i} onClick={() => handleSend(chip)} disabled={loading}
+              className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-cyan-950/80 border border-slate-800 hover:border-cyan-500/40 text-xs text-slate-300 hover:text-cyan-400 transition disabled:opacity-40 text-left">
+              {chip}
+            </button>
+          ))}
+        </div>
       </div>
 
-      <form onSubmit={e => { e.preventDefault(); handleSend(); }} className="p-4 bg-slate-900 border-t border-slate-800 flex space-x-3">
-        <input
-          type="text"
-          value={inputValue}
-          onChange={e => setInputValue(e.target.value)}
-          placeholder={t.assistant.inputPlaceholder}
-          className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-2.5 text-sm text-white focus:outline-none focus:border-cyan-500"
-        />
-        <button type="submit" disabled={loading} className="px-5 py-2.5 rounded-xl bg-cyan-600 text-white font-bold text-sm shadow-md hover:bg-cyan-500 disabled:opacity-50">
-          {t.assistant.sendBtn}
+      {/* Input */}
+      <form onSubmit={e => { e.preventDefault(); handleSend(); }}
+        className="p-4 border-t border-slate-800 bg-slate-900/90 flex items-center space-x-3 shrink-0">
+        <input type="text" value={inputValue} onChange={e => setInputValue(e.target.value)}
+          placeholder={t.assistant.inputPlaceholder} disabled={loading}
+          className="flex-1 bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 text-sm text-white placeholder-slate-500 focus:outline-none focus:border-cyan-500 transition disabled:opacity-50" />
+        <button type="submit" disabled={!inputValue.trim() || loading}
+          className="px-5 py-3 rounded-xl bg-gradient-to-r from-cyan-500 to-cyan-600 hover:from-cyan-400 hover:to-cyan-500 disabled:opacity-40 text-white text-sm font-bold shadow-lg flex items-center space-x-2 transition">
+          <span>{t.assistant.sendBtn}</span>
+          <span>➤</span>
         </button>
       </form>
     </div>
@@ -554,36 +641,140 @@ function ChatbotTab({ t, lang }) {
 }
 
       function GdsSecurityTab({ t }) {
+        const [refreshing, setRefreshing] = useState(false);
+        const [lastUpdate, setLastUpdate] = useState(new Date());
+        const [countdown, setCountdown] = useState(30);
+        // Latence simulée live (fluctuation légère)
+        const [latencies, setLatencies] = useState([42, 115, 28, 64]);
+
+        useEffect(() => {
+          const tick = setInterval(() => {
+            setCountdown(c => {
+              if (c <= 1) {
+                // Simuler une mise à jour des latences
+                setLatencies([42 + Math.floor(Math.random()*8-4), 115 + Math.floor(Math.random()*20-10), 28 + Math.floor(Math.random()*6-3), 64 + Math.floor(Math.random()*10-5)]);
+                setLastUpdate(new Date());
+                return 30;
+              }
+              return c - 1;
+            });
+          }, 1000);
+          return () => clearInterval(tick);
+        }, []);
+
+        const handleRefresh = () => {
+          setRefreshing(true);
+          setLatencies([42 + Math.floor(Math.random()*8-4), 115 + Math.floor(Math.random()*20-10), 28 + Math.floor(Math.random()*6-3), 64 + Math.floor(Math.random()*10-5)]);
+          setTimeout(() => { setRefreshing(false); setLastUpdate(new Date()); setCountdown(30); }, 900);
+        };
+
+        const systemsData = [
+          { anomaly: 'Aucune', anomalyEn: 'None' },
+          { anomaly: 'Force brute bloquée (23 req/s)', anomalyEn: 'Brute force blocked (23 req/s)' },
+          { anomaly: 'Aucune', anomalyEn: 'None' },
+          { anomaly: 'Aucune', anomalyEn: 'None' },
+        ];
+
+        const statusColors = (s) => s === 'Protégé' || s === 'Protected'
+          ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+          : 'bg-amber-500/10 text-amber-400 border-amber-500/30';
+
         return (
           <div className="space-y-6">
-            <div className="glass-panel p-6 rounded-2xl border border-slate-800">
-              <h2 className="text-2xl font-bold text-white">{t.gdsSecurity.title}</h2>
-              <p className="text-sm text-slate-400 mt-1">{t.gdsSecurity.subtitle}</p>
+            {/* Header Banner */}
+            <div className="glass-panel p-6 rounded-2xl border border-slate-800 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-bold text-white flex items-center space-x-2">
+                  <span>🌐</span>
+                  <span>{t.gdsSecurity.title}</span>
+                </h2>
+                <p className="text-sm text-slate-400 mt-1">{t.gdsSecurity.subtitle}</p>
+              </div>
+              <div className="flex items-center space-x-4">
+                <div className="text-center">
+                  <div className="text-[10px] text-slate-500 uppercase font-bold">Prochain refresh</div>
+                  <div className="text-2xl font-black text-cyan-400 tabular-nums">{String(countdown).padStart(2,'0')}s</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-[10px] text-slate-500 uppercase font-bold">Mis à jour</div>
+                  <div className="text-xs text-slate-300 font-mono">{lastUpdate.toLocaleTimeString('fr-FR')}</div>
+                </div>
+                <button onClick={handleRefresh} disabled={refreshing}
+                  className="flex items-center space-x-2 px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-xs font-bold text-slate-200 transition">
+                  <span className={refreshing ? 'animate-spin' : ''}>🔄</span>
+                  <span>Rafraîchir</span>
+                </button>
+              </div>
             </div>
 
+            {/* Live Status Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+              {t.gdsSecurity.systems.map((s, i) => (
+                <div key={i} className={`glass-panel p-4 rounded-2xl border ${ s.status === 'Protégé' || s.status === 'Protected' ? 'border-emerald-500/20' : 'border-amber-500/30'}`}>
+                  <div className="flex items-start justify-between">
+                    <span className="text-xs font-bold text-slate-300 leading-tight">{s.name}</span>
+                    <span className={`h-2.5 w-2.5 rounded-full shrink-0 mt-0.5 ${ s.status === 'Protégé' || s.status === 'Protected' ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400 animate-pulse'}`}></span>
+                  </div>
+                  <div className="mt-3 text-2xl font-black font-mono text-cyan-400">{latencies[i]} ms</div>
+                  <div className="text-[10px] text-slate-500 mt-1">Latence temps réel</div>
+                  <div className={`mt-2 text-[10px] font-bold px-2 py-0.5 rounded-full inline-block border ${ statusColors(s.status)}`}>
+                    {s.status === 'Protégé' || s.status === 'Protected' ? '✓ ' : '⚠ '}{s.status}
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            {/* Systems Table */}
             <div className="glass-panel rounded-2xl border border-slate-800 overflow-hidden">
-              <table className="w-full text-left text-sm text-slate-300">
-                <thead className="bg-slate-900 text-xs uppercase tracking-wider text-slate-400">
-                  <tr>
-                    <th className="py-3.5 px-6">Connecteur</th>
-                    <th className="py-3.5 px-6">Type</th>
-                    <th className="py-3.5 px-6">Statut</th>
-                    <th className="py-3.5 px-6">Latence</th>
-                    <th className="py-3.5 px-6">TLS</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-800">
-                  {t.gdsSecurity.systems.map((s, i) => (
-                    <tr key={i} className="hover:bg-slate-900/50">
-                      <td className="py-4 px-6 font-bold text-white">{s.name}</td>
-                      <td className="py-4 px-6 text-slate-400">{s.type}</td>
-                      <td className="py-4 px-6"><span className="px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-500/10 text-emerald-400 border border-emerald-500/30">{s.status}</span></td>
-                      <td className="py-4 px-6 font-mono text-cyan-400 font-semibold">{s.latency}</td>
-                      <td className="py-4 px-6 font-mono text-xs text-slate-400">{s.tls}</td>
+              <div className="px-6 py-3 border-b border-slate-800 bg-slate-900/70 flex items-center space-x-2">
+                <span className="h-2 w-2 rounded-full bg-cyan-400 animate-pulse"></span>
+                <span className="text-xs font-bold text-slate-300 uppercase tracking-wider">Monitoring Live — Connecteurs GDS</span>
+              </div>
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-sm text-slate-300">
+                  <thead className="bg-slate-900/90 text-[11px] uppercase tracking-wider text-slate-400 border-b border-slate-800">
+                    <tr>
+                      <th className="py-3.5 px-6">Système / Connecteur</th>
+                      <th className="py-3.5 px-6">Type</th>
+                      <th className="py-3.5 px-6">Statut</th>
+                      <th className="py-3.5 px-6">Latence Live</th>
+                      <th className="py-3.5 px-6">TLS</th>
+                      <th className="py-3.5 px-6">Anomalie Récente</th>
                     </tr>
-                  ))}
-                </tbody>
-              </table>
+                  </thead>
+                  <tbody className="divide-y divide-slate-800/80">
+                    {t.gdsSecurity.systems.map((s, i) => (
+                      <tr key={i} className="hover:bg-slate-900/50 transition">
+                        <td className="py-4 px-6 font-bold text-white flex items-center space-x-2">
+                          <span className="text-cyan-400">⚙️</span>
+                          <span>{s.name}</span>
+                        </td>
+                        <td className="py-4 px-6 text-slate-400 font-medium">{s.type}</td>
+                        <td className="py-4 px-6">
+                          <span className={`inline-flex items-center space-x-1.5 px-2.5 py-1 rounded-full text-xs font-bold border ${ statusColors(s.status)}`}>
+                            <span>{ s.status === 'Protégé' || s.status === 'Protected' ? '✓' : '⚠'}</span>
+                            <span>{s.status}</span>
+                          </span>
+                        </td>
+                        <td className="py-4 px-6">
+                          <span className="font-mono text-cyan-400 font-semibold text-base tabular-nums">{latencies[i]} ms</span>
+                        </td>
+                        <td className="py-4 px-6 font-mono text-xs text-slate-300">{s.tls}</td>
+                        <td className="py-4 px-6">
+                          {systemsData[i].anomaly === 'Aucune' ? (
+                            <span className="text-slate-500 text-xs">Aucune</span>
+                          ) : (
+                            <span className="text-amber-400 text-xs font-semibold flex items-center space-x-1">
+                              <span>⚠️</span>
+                              <span>{systemsData[i].anomaly}</span>
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
             </div>
           </div>
         );
@@ -764,8 +955,9 @@ function ChatbotTab({ t, lang }) {
         return (
           <div className="min-h-screen bg-[#0B0F17] text-slate-100 flex flex-col font-sans">
             {toast && (
-              <div className="fixed bottom-6 right-6 z-50 px-4 py-3 rounded-xl bg-cyan-950 border border-cyan-500 text-cyan-300 text-xs font-bold shadow-2xl">
-                ✓ {toast}
+              <div className="fixed bottom-6 right-6 z-50 flex items-center space-x-2 px-4 py-3 rounded-xl bg-cyan-950 border border-cyan-500 text-cyan-300 text-xs font-bold shadow-2xl shadow-cyan-950/40">
+                <span className="text-emerald-400">✔</span>
+                <span>{toast}</span>
               </div>
             )}
 
