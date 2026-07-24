@@ -31,18 +31,14 @@ export const translations = {
       title: "Tableau de Bord de Cybersécurité Executif",
       subtitle: "Vue unifiée des vulnérabilités, API de réservation GDS et menaces cyber du secteur voyage.",
       kpis: {
-        monitoredApis: "API Surveillées",
-        monitoredApisSub: "Amadeus, Sabre, Billetterie, Paiement",
-        riskScore: "Score de Risque Global",
-        riskScoreSub: "+3 pts ce mois-ci",
-        activeAlerts: "Alertes Actives",
-        activeAlertsSub: "0 Critique, 2 Élevées",
-        protectedBookings: "Réservations Protégées",
-        protectedBookingsSub: "24h glissantes",
+        monitoredApis: "APIs Surveillées",
+        activeThreats: "Menaces Actives",
+        securityScore: "Score de Sécurité",
+        protectedTx: "Conformité PCI-DSS",
       },
       charts: {
-        threatTrendsTitle: "Évolution Temporelle des Menaces (24h)",
-        severityDistTitle: "Répartition des Vulnérabilités par Sévérité",
+        trendTitle: "Évolution des Menaces vs Réservations (24h)",
+        severityTitle: "Vulnérabilités par Sévérité",
         severityLabels: {
           critical: "Critique",
           high: "Élevée",
@@ -186,17 +182,13 @@ export const translations = {
       subtitle: "Unified view of vulnerabilities, GDS booking APIs, and cyber threats in the travel industry.",
       kpis: {
         monitoredApis: "Monitored APIs",
-        monitoredApisSub: "Amadeus, Sabre, Ticketing, Payments",
-        riskScore: "Global Risk Score",
-        riskScoreSub: "+3 pts this month",
-        activeAlerts: "Active Alerts",
-        activeAlertsSub: "0 Critical, 2 High",
-        protectedBookings: "Protected Bookings",
-        protectedBookingsSub: "Rolling 24 hours",
+        activeThreats: "Active Threats",
+        securityScore: "Security Score",
+        protectedTx: "PCI-DSS Compliance",
       },
       charts: {
-        threatTrendsTitle: "Threat Activity Trend (24h)",
-        severityDistTitle: "Vulnerability Severity Distribution",
+        trendTitle: "Threat vs Bookings Trend (24h)",
+        severityTitle: "Vulnerabilities by Severity",
         severityLabels: {
           critical: "Critical",
           high: "High",
@@ -204,6 +196,7 @@ export const translations = {
           low: "Low",
         },
       },
+
       quickActions: {
         title: "Quick Actions & Priority Recommendations",
         auditPayment: "Audit Payment Gateway",
