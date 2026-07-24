@@ -358,56 +358,198 @@
         );
       }
 
-      function DashboardTab({ t, notify }) {
+      function DashboardTab({ t, notify, agency = 'abidjan', onAskAssistant }) {
+        const [loadingAction, setLoadingAction] = useState(null);
+        const [selectedActionModal, setSelectedActionModal] = useState(null);
+
+        const agencyMetrics = {
+          abidjan: {
+            name: "Agence Abidjan",
+            monitoredApis: 14,
+            threatCount: 19,
+            riskScore: 82,
+            riskStatus: "ATTENTION",
+            riskBadgeColor: "text-amber-400 bg-amber-500/10 border-amber-500/30",
+            critical: 2,
+            high: 5,
+            medium: 8,
+            low: 4,
+            trendData: [
+              { time: '00:00', threats: 12, bookings: 420 },
+              { time: '04:00', threats: 8, bookings: 210 },
+              { time: '08:00', threats: 15, bookings: 890 },
+              { time: '12:00', threats: 24, bookings: 1450 },
+              { time: '16:00', threats: 18, bookings: 1210 },
+              { time: '20:00', threats: 9, bookings: 780 },
+            ]
+          },
+          paris: {
+            name: "Agence Paris",
+            monitoredApis: 28,
+            threatCount: 6,
+            riskScore: 96,
+            riskStatus: "OPTIMAL",
+            riskBadgeColor: "text-emerald-400 bg-emerald-500/10 border-emerald-500/30",
+            critical: 0,
+            high: 1,
+            medium: 2,
+            low: 3,
+            trendData: [
+              { time: '00:00', threats: 2, bookings: 890 },
+              { time: '04:00', threats: 1, bookings: 340 },
+              { time: '08:00', threats: 4, bookings: 1900 },
+              { time: '12:00', threats: 6, bookings: 2800 },
+              { time: '16:00', threats: 3, bookings: 2100 },
+              { time: '20:00', threats: 2, bookings: 1450 },
+            ]
+          },
+          global: {
+            name: "Toutes les Agences (Global)",
+            monitoredApis: 42,
+            threatCount: 25,
+            riskScore: 89,
+            riskStatus: "BON",
+            riskBadgeColor: "text-cyan-400 bg-cyan-500/10 border-cyan-500/30",
+            critical: 2,
+            high: 6,
+            medium: 10,
+            low: 7,
+            trendData: [
+              { time: '00:00', threats: 14, bookings: 1310 },
+              { time: '04:00', threats: 9, bookings: 550 },
+              { time: '08:00', threats: 19, bookings: 2790 },
+              { time: '12:00', threats: 30, bookings: 4250 },
+              { time: '16:00', threats: 21, bookings: 3310 },
+              { time: '20:00', threats: 11, bookings: 2230 },
+            ]
+          }
+        };
+
+        const currentData = agencyMetrics[agency] || agencyMetrics.abidjan;
+
+        const downloadAuditReport = () => {
+          const reportContent = `===============================================================
+TECHPULSE-AI — RAPPORT D'AUDIT CYBER ET CONFORMITÉ GDS
+===============================================================
+Agence : ${currentData.name}
+Date de l'audit : ${new Date().toLocaleDateString('fr-FR')} à ${new Date().toLocaleTimeString('fr-FR')}
+Statut de Sécurité : ${currentData.riskStatus} (Score : ${currentData.riskScore}/100)
+
+---------------------------------------------------------------
+1. MÉTRIQUES ET INDICATEURS CLÉS (KPI)
+---------------------------------------------------------------
+- APIs & Endpoints Surveillés : ${currentData.monitoredApis}
+- Incidents / Menaces Détectés : ${currentData.threatCount}
+- Niveau de Menace Critique : ${currentData.critical}
+- Niveau de Menace Élevée : ${currentData.high}
+- Niveau de Menace Moyenne : ${currentData.medium}
+- Niveau de Menace Faible : ${currentData.low}
+
+---------------------------------------------------------------
+2. SYNTHÈSE DES RECOMMANDATIONS ACTIONNABLES
+---------------------------------------------------------------
+[ACTION 1] Passerelles de Paiement (PCI-DSS)
+- Détection : TLS obsolète sur les flux de paiement.
+- Recommandation : Activer impérativement TLS 1.3 sur les endpoints.
+
+[ACTION 2] Système GDS Amadeus & Sabre
+- Détection : ${currentData.critical > 0 ? 'Jetons API à renouveler d\'urgence' : 'Accès conformes et sécurisés'}.
+- Recommandation : Appliquer la rotation automatique des jetons PNR.
+
+[ACTION 3] Webhooks de Réservation (Protection RCE)
+- Détection : Risque potentiel d'injection JSON.
+- Recommandation : Valider les payloads avec Pydantic.
+
+---------------------------------------------------------------
+Certifié par le moteur d'Intelligence Cyber TECHPULSE-AI (RAG + DistilBERT)
+===============================================================`;
+
+          const blob = new Blob([reportContent], { type: 'text/plain;charset=utf-8' });
+          const url = URL.createObjectURL(blob);
+          const link = document.createElement('a');
+          link.href = url;
+          link.download = `Audit_Cyber_TECHPULSE_${agency.toUpperCase()}_${Date.now()}.txt`;
+          document.body.appendChild(link);
+          link.click();
+          document.body.removeChild(link);
+          URL.revokeObjectURL(url);
+        };
+
+        const handleAction = (actionKey) => {
+          setLoadingAction(actionKey);
+          setTimeout(() => {
+            setLoadingAction(null);
+            if (actionKey === 'generateReport') {
+              downloadAuditReport();
+              notify("Rapport d'audit téléchargé avec succès ! 📄");
+            } else {
+              notify(t.dashboard.quickActions.actionSuccess);
+            }
+          }, 600);
+        };
+
         return (
           <div className="space-y-6">
-            <div className="glass-panel p-6 rounded-2xl border border-slate-800 bg-gradient-to-r from-slate-900/90 via-slate-900/60 to-cyan-950/30">
-              <h2 className="text-2xl font-bold text-white tracking-tight">{t.dashboard.title}</h2>
-              <p className="text-sm text-slate-400 mt-1">{t.dashboard.subtitle}</p>
+            {/* Header Banner */}
+            <div className="glass-panel p-6 rounded-2xl border border-slate-800 bg-gradient-to-r from-slate-900/90 via-slate-900/60 to-cyan-950/30 flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h2 className="text-2xl font-bold text-white tracking-tight">{t.dashboard.title}</h2>
+                <p className="text-sm text-slate-400 mt-1">{t.dashboard.subtitle}</p>
+              </div>
+              <span className={`px-3 py-1 rounded-full text-xs font-black border uppercase tracking-wider ${currentData.riskBadgeColor}`}>
+                ● Statut {currentData.riskStatus}
+              </span>
             </div>
 
-            <div className="grid grid-cols-4 gap-4">
+            {/* KPI Cards */}
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
               <div className="glass-panel p-5 rounded-2xl border border-slate-800">
                 <span className="text-xs font-semibold text-slate-400 uppercase">{t.dashboard.kpis.monitoredApis}</span>
-                <div className="mt-3 text-3xl font-extrabold text-white">14</div>
-                <p className="text-xs text-slate-400 mt-1">{t.dashboard.kpis.monitoredApisSub}</p>
+                <div className="mt-3 text-3xl font-extrabold text-white">{currentData.monitoredApis}</div>
+                <p className="text-xs text-cyan-400 mt-1">Amadeus, Sabre, Stripe</p>
               </div>
 
               <div className="glass-panel p-5 rounded-2xl border border-slate-800">
-                <span className="text-xs font-semibold text-slate-400 uppercase">{t.dashboard.kpis.riskScore}</span>
-                <div className="mt-3 text-3xl font-extrabold text-emerald-400">28<span className="text-sm text-slate-400">/100</span></div>
-                <p className="text-xs text-emerald-400 font-semibold mt-1">{t.dashboard.kpis.riskScoreSub}</p>
+                <span className="text-xs font-semibold text-slate-400 uppercase">Score de Sécurité</span>
+                <div className="mt-3 text-3xl font-extrabold text-emerald-400">{currentData.riskScore}<span className="text-sm text-slate-400">/100</span></div>
+                <p className="text-xs text-emerald-400 font-semibold mt-1">Conformité PCI-DSS</p>
               </div>
 
               <div className="glass-panel p-5 rounded-2xl border border-slate-800">
-                <span className="text-xs font-semibold text-slate-400 uppercase">{t.dashboard.kpis.activeAlerts}</span>
-                <div className="mt-3 text-3xl font-extrabold text-amber-400">2</div>
-                <p className="text-xs text-slate-400 mt-1">{t.dashboard.kpis.activeAlertsSub}</p>
+                <span className="text-xs font-semibold text-slate-400 uppercase">Menaces Détectées</span>
+                <div className="mt-3 text-3xl font-extrabold text-amber-400">{currentData.threatCount}</div>
+                <p className="text-xs text-slate-400 mt-1">{currentData.critical} Critique(s), {currentData.high} Élevée(s)</p>
               </div>
 
               <div className="glass-panel p-5 rounded-2xl border border-slate-800">
-                <span className="text-xs font-semibold text-slate-400 uppercase">{t.dashboard.kpis.protectedBookings}</span>
-                <div className="mt-3 text-3xl font-extrabold text-white">18,420</div>
-                <p className="text-xs text-slate-400 mt-1">{t.dashboard.kpis.protectedBookingsSub}</p>
+                <span className="text-xs font-semibold text-slate-400 uppercase">Vulnérabilités par Sévérité</span>
+                <div className="mt-3 flex items-center space-x-2 font-mono text-sm font-bold">
+                  <span className="text-rose-400">🔴 {currentData.critical}</span>
+                  <span className="text-amber-400">🟠 {currentData.high}</span>
+                  <span className="text-cyan-400">🟡 {currentData.medium}</span>
+                  <span className="text-emerald-400">🟢 {currentData.low}</span>
+                </div>
+                <p className="text-xs text-slate-400 mt-1">Classification DistilBERT</p>
               </div>
             </div>
 
+            {/* Quick Actions */}
             <div className="glass-panel p-6 rounded-2xl border border-slate-800">
               <h3 className="text-base font-bold text-white mb-4">⚡ {t.dashboard.quickActions.title}</h3>
-              <div className="grid grid-cols-4 gap-4">
-                <div onClick={() => notify(t.dashboard.quickActions.actionSuccess)} className="p-4 rounded-xl bg-slate-900 border border-slate-800 hover:border-cyan-500/40 cursor-pointer transition">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <div onClick={() => handleAction('auditPayment')} className="p-4 rounded-xl bg-slate-900 border border-slate-800 hover:border-cyan-500/40 cursor-pointer transition">
                   <h4 className="font-bold text-sm text-white">{t.dashboard.quickActions.auditPayment}</h4>
                   <p className="text-xs text-slate-400 mt-1">{t.dashboard.quickActions.auditPaymentDesc}</p>
                 </div>
-                <div onClick={() => notify(t.dashboard.quickActions.actionSuccess)} className="p-4 rounded-xl bg-slate-900 border border-slate-800 hover:border-emerald-500/40 cursor-pointer transition">
+                <div onClick={() => handleAction('verifyAmadeus')} className="p-4 rounded-xl bg-slate-900 border border-slate-800 hover:border-emerald-500/40 cursor-pointer transition">
                   <h4 className="font-bold text-sm text-white">{t.dashboard.quickActions.verifyAmadeus}</h4>
                   <p className="text-xs text-slate-400 mt-1">{t.dashboard.quickActions.verifyAmadeusDesc}</p>
                 </div>
-                <div onClick={() => notify(t.dashboard.quickActions.actionSuccess)} className="p-4 rounded-xl bg-slate-900 border border-slate-800 hover:border-amber-500/40 cursor-pointer transition">
+                <div onClick={() => handleAction('scanEndpoints')} className="p-4 rounded-xl bg-slate-900 border border-slate-800 hover:border-amber-500/40 cursor-pointer transition">
                   <h4 className="font-bold text-sm text-white">{t.dashboard.quickActions.scanEndpoints}</h4>
                   <p className="text-xs text-slate-400 mt-1">{t.dashboard.quickActions.scanEndpointsDesc}</p>
                 </div>
-                <div onClick={() => notify(t.dashboard.quickActions.actionSuccess)} className="p-4 rounded-xl bg-slate-900 border border-slate-800 hover:border-cyan-500/40 cursor-pointer transition">
+                <div onClick={() => handleAction('generateReport')} className="p-4 rounded-xl bg-slate-900 border border-slate-800 hover:border-cyan-500/40 cursor-pointer transition">
                   <h4 className="font-bold text-sm text-white">{t.dashboard.quickActions.generateReport}</h4>
                   <p className="text-xs text-slate-400 mt-1">{t.dashboard.quickActions.generateReportDesc}</p>
                 </div>
@@ -966,7 +1108,7 @@ function ChatbotTab({ t, lang }) {
             <div className="flex-1 flex p-6 gap-6 max-w-7xl mx-auto w-full">
               <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} t={t} />
               <main className="flex-1 min-w-0">
-                {activeTab === 'dashboard' && <DashboardTab t={t} notify={notify} />}
+                {activeTab === 'dashboard' && <DashboardTab t={t} notify={notify} agency={agency} />}
                 {activeTab === 'assistant' && <ChatbotTab t={t} lang={lang} />}
                 {activeTab === 'gdsSecurity' && <GdsSecurityTab t={t} />}
                 {activeTab === 'settings' && (
