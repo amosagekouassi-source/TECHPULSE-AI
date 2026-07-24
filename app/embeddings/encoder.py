@@ -1,32 +1,60 @@
-"""Sentence Transformer embeddings encoder for TECHPULSE-AI."""
+"""Sentence Transformer embeddings encoder for TECHPULSE-AI.
+
+Memory-optimized: SentenceTransformer is lazy-loaded on first use only,
+so torch (~400MB) and transformers (~200MB) are NOT loaded at server startup.
+This keeps Render free-tier (512MB) usage within safe limits.
+"""
 
 from __future__ import annotations
 
 import logging
-from typing import List
+from typing import List, Optional
 
 import numpy as np
-from sentence_transformers import SentenceTransformer
 
 LOGGER = logging.getLogger(__name__)
+
+# Global singleton — loaded once on first call, None until then
+_MODEL_CACHE: Optional[object] = None
+
+
+def _get_model(model_name: str = "all-MiniLM-L6-v2"):
+    """Return cached SentenceTransformer instance, loading it on first call."""
+    global _MODEL_CACHE
+    if _MODEL_CACHE is None:
+        LOGGER.info("Lazy-loading embedding model: %s (first request only)", model_name)
+        from sentence_transformers import SentenceTransformer  # noqa: PLC0415
+        _MODEL_CACHE = SentenceTransformer(model_name)
+        LOGGER.info("Embedding model loaded successfully.")
+    return _MODEL_CACHE
 
 
 class TextEmbedder:
     """Encoder for generating dense vector embeddings using all-MiniLM-L6-v2."""
 
     def __init__(self, model_name: str = "all-MiniLM-L6-v2") -> None:
-        """Initialize the sentence transformer model.
+        """Store model name only — actual model loaded on first use.
 
         Args:
             model_name: Hugging Face model identifier for sentence embeddings.
         """
-        LOGGER.info("Loading embedding model: %s", model_name)
         self.model_name = model_name
-        self.model = SentenceTransformer(model_name)
-        if hasattr(self.model, "get_embedding_dimension"):
-            self.dimension = self.model.get_embedding_dimension()
-        else:
-            self.dimension = self.model.get_sentence_embedding_dimension()
+        self._dimension: Optional[int] = None  # resolved lazily
+
+    @property
+    def model(self):
+        """Lazily return the loaded SentenceTransformer model."""
+        return _get_model(self.model_name)
+
+    @property
+    def dimension(self) -> int:
+        if self._dimension is None:
+            m = self.model
+            if hasattr(m, "get_embedding_dimension"):
+                self._dimension = m.get_embedding_dimension()
+            else:
+                self._dimension = m.get_sentence_embedding_dimension()
+        return self._dimension
 
     def embed_texts(
         self,

@@ -10,6 +10,8 @@ numpy>=1.24.0
 pandas>=2.0.0
 faiss-cpu
 scikit-learn
+# torch CPU-only (évite de charger CUDA ~2GB inutilement sur Render free tier)
+--extra-index-url https://download.pytorch.org/whl/cpu
 torch
 transformers
 sentence-transformers
